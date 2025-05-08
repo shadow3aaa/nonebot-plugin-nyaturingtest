@@ -2,8 +2,14 @@
     <a href="https://v2.nonebot.dev/store">
     <img src="https://raw.githubusercontent.com/fllesser/nonebot-plugin-template/refs/heads/resource/.docs/NoneBotPlugin.svg" width="310" alt="logo"></a>
 
-## ✨ nonebot-plugin-template ✨
+## ✨ nonebot-plugin-nyaturingtest ✨
 
+<a href="./LICENSE">
+    <img src="https://img.shields.io/github/license/shadow3aaa/nonebot-plugin-nyaturingtest.svg" alt="license">
+</a>
+<a href="https://pypi.python.org/pypi/nonebot-plugin-nyaturingtest">
+    <img src="https://img.shields.io/pypi/v/nonebot-plugin-nyaturingtest.svg" alt="pypi">
+</a>
 <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="python">
 <a href="https://github.com/astral-sh/ruff">
     <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json" alt="ruff">
@@ -14,93 +20,83 @@
 </div>
 
 > [!IMPORTANT]
-> **收藏项目** 方便下次创建插件仓库～⭐️
+> **收藏项目** ～⭐️
 
-<img width="100%" src="https://starify.komoridevs.icu/api/starify?owner=fllesser&repo=nonebot-plugin-template" alt="starify" />
+<img width="100%" src="https://starify.komoridevs.icu/api/starify?owner=shadow3aaa&repo=nonebot-plugin-nyaturingtest" alt="starify" />
 
-### 🎉 快速开始
 
-1. 点击 [创建仓库](https://github.com/new?template_owner=fllesser&template_name=nonebot-plugin-template&owner=%40me&name=nonebot-plugin-&visibility=public)
-2. **⚠️ 重要:** 前往仓库 `Settings` -> `Actions` -> `General` -> 最下方 `Workflow permissions`, 勾选 `Read and write permissions`，然后点击 `Save` 按钮
-3. 在 `Add file` 菜单中选择 `Create new file`, 在新文件名处输入`LICENSE`, 此时在右侧会出现一个 `Choose a license template` 按钮, 点击此按钮选择开源协议模板, 然后在最下方提交新文件到主分支(这会触发一个工作流，生成新的 `README`，并修改 `pyproject.toml` 等文件中的插件名称)
+## 📖 介绍
 
-> [!NOTE]
-> 模板库中自带了一个发布工作流, 你可以使用此工作流自动发布你的插件到 pypi
+这里是插件的详细介绍部分
 
-<details>
-<summary>配置发布工作流</summary>
+## 💿 安装
 
-1. 前往 https://pypi.org/manage/account/#api-tokens 并创建一个新的 API 令牌。创建成功后不要关闭页面，不然你将无法再次查看此令牌。
-2. 在单独的浏览器选项卡或窗口中，打开 [Actions secrets and variables](./settings/secrets/actions) 页面。你也可以在 Settings - Secrets and variables - Actions 中找到此页面。
-3. 点击 New repository secret 按钮，创建一个名为 `PYPI_API_TOKEN` 的新令牌，并从第一步复制粘贴令牌。
+<details open>
+<summary>使用 nb-cli 安装</summary>
+在 nonebot2 项目的根目录下打开命令行, 输入以下指令即可安装
 
-</details>
+    nb plugin install nonebot-plugin-nyaturingtest --upgrade
+使用 **pypi** 源安装
 
-<details>
-<summary>触发发布工作流</summary>
+    nb plugin install nonebot-plugin-nyaturingtest --upgrade -i "https://pypi.org/simple"
+使用**清华源**安装
 
-从本地推送任意 `tag` 即可触发。
+    nb plugin install nonebot-plugin-nyaturingtest --upgrade -i "https://pypi.tuna.tsinghua.edu.cn/simple"
 
-创建 `tag`:
-
-    git tag v*
-
-推送本地所有 `tag`:
-
-    git push origin --tags
 
 </details>
 
-> [!IMPORTANT]
-> 不会使用 uv ？
-
 <details>
-<summary>不会看文档去</summary>
+<summary>使用包管理器安装</summary>
+在 nonebot2 项目的插件目录下, 打开命令行, 根据你使用的包管理器, 输入相应的安装命令
 
-<details>
-<summary>安装 uv </summary>
+<details open>
+<summary>uv</summary>
 
-`windows`:
+    uv add nonebot-plugin-nyaturingtest
+安装仓库 master 分支
 
-    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-`curl`:
-
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-`pipx`:
-
-    pipx install uv
-    
+    uv add git+https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest@master
 </details>
 
-安装所有依赖(自动创建 `venv` 虚拟环境, `-p` 指定 `python` 版本):
-
-    uv sync --all-groups -p 3.12
-添加其他依赖, 例如 `koishi`(bushi
-
-    uv add koishi
-[uv 文档](https://astral.sh/blog/uv)
-</details>
-
-> [!NOTE]
-> pre-commit 使用方法
-
 <details>
-<summary>使用 nonemoji 为 commit message 添加 emoji 前缀 </summary>
+<summary>pdm</summary>
 
-安装 `nonemoji`
+    pdm add nonebot-plugin-nyaturingtest
+安装仓库 master 分支
 
-    pipx install nonemoji
-安装 `pre-commit`
-
-    pipx install pre-commit
-
-    pre-commit install
-添加到暂存区
-
-    git add <待提交文件>
-使用 `nonemoji` 编辑 `commit message` 并**提交**
-
-    nonemoji
-
-仓库地址: [nonemoji](https://github.com/nonebot/nonemoji)
+    pdm add git+https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest@master
 </details>
+<details>
+<summary>poetry</summary>
+
+    poetry add nonebot-plugin-nyaturingtest
+安装仓库 master 分支
+
+    poetry add git+https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest@master
+</details>
+
+打开 nonebot2 项目根目录下的 `pyproject.toml` 文件, 在 `[tool.nonebot]` 部分追加写入
+
+    plugins = ["nonebot_plugin_nyaturingtest"]
+
+</details>
+
+## ⚙️ 配置
+
+在 nonebot2 项目的`.env`文件中添加下表中的必填配置
+
+| 配置项  | 必填  | 默认值 |   说明   |
+| :-----: | :---: | :----: | :------: |
+| 配置项1 |  是   |   无   | 配置说明 |
+| 配置项2 |  否   |   无   | 配置说明 |
+
+## 🎉 使用
+### 指令表
+| 指令  | 权限  | 需要@ | 范围  |   说明   |
+| :---: | :---: | :---: | :---: | :------: |
+| 指令1 | 主人  |  否   | 私聊  | 指令说明 |
+| 指令2 | 群员  |  是   | 群聊  | 指令说明 |
+
+### 🎨 效果图
+如果有效果图的话

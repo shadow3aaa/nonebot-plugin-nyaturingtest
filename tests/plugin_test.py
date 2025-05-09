@@ -36,7 +36,7 @@ async def test_pip(app: App):
 
     event = make_onebot_msg(Message("pip install nonebot2"))
     try:
-        from nonebot_plugin_nyaturingtest import pip
+        from . import pip
     except ImportError:
         pytest.skip("nonebot_plugin_nyaturingtest.pip not found")
 

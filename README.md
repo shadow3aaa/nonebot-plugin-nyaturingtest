@@ -4,7 +4,7 @@
 
 ## ✨ nonebot-plugin-nyaturingtest ✨
 
-#### **N**ot**Y**et**A**notherTurningTest
+#### **N**ot**Y**et**A**notherTuringTest
 
 <p>
     <a href="https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest">

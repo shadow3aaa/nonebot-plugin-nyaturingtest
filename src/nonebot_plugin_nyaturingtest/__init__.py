@@ -44,7 +44,12 @@ class GroupState:
         default_factory=lambda: Session(siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key)
     )
     message_chunk: list[MMessage] = field(default_factory=list)
-    client = LLMClient(client=OpenAI(api_key=plugin_config.nyaturingtest_chat_openai_api_key))
+    client = LLMClient(
+        client=OpenAI(
+            api_key=plugin_config.nyaturingtest_chat_openai_api_key,
+            base_url=plugin_config.nyaturingtest_chat_openai_base_url,
+        )
+    )
 
 
 _tasks: set[asyncio.Task] = set()
@@ -125,7 +130,12 @@ async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandA
             if provider == "gemini":
                 state.client = LLMClient(client=genai.Client(api_key=plugin_config.nyaturingtest_chat_gemini_api_key))
             elif provider == "openai":
-                state.client = LLMClient(client=OpenAI(api_key=plugin_config.nyaturingtest_chat_openai_api_key))
+                state.client = LLMClient(
+                    client=OpenAI(
+                        api_key=plugin_config.nyaturingtest_chat_openai_api_key,
+                        base_url=plugin_config.nyaturingtest_chat_openai_base_url,
+                    )
+                )
             await set_provider.finish(f"已设置提供者为: {provider}")
         else:
             await set_provider.finish("无效的提供者，请选择 'gemini' 或 'openai'")

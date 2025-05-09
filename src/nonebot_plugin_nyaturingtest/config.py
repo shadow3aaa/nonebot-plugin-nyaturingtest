@@ -10,5 +10,6 @@ class Config(BaseModel):
     nyaturingtest_embedding_siliconflow_api_key: str
     nyaturingtest_enabled_groups: list[int] = []
 
+
 plugin_config: Config = get_plugin_config(Config)
 global_config = get_driver().config

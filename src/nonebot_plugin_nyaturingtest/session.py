@@ -32,13 +32,13 @@ class Session:
         全局短时记忆
         """
         self.global_long_term_memory: LongTermMemory = LongTermMemory(
-            api_key=siliconflow_api_key, index_filename=f"faiss_index_{id}"
+            embedding_api_key=siliconflow_api_key, index_filename=f"faiss_index_{id}"
         )
         """
         全局长期记忆
         """
         self.global_knowledge_memory: KnowledgeMemory = KnowledgeMemory(
-            api_key=siliconflow_api_key,
+            embedding_api_key=siliconflow_api_key,
             index_filename=f"faiss_knowledge_index_{id}",
         )
         """

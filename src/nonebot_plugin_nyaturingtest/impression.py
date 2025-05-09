@@ -7,5 +7,6 @@ class Impression:
     """
     记录某次互动带来的印象
     """
+
     timestamp: datetime
     delta: dict

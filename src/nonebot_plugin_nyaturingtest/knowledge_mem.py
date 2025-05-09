@@ -18,14 +18,14 @@ from .siliconflow_embeddings import SiliconFlowEmbeddings
 class KnowledgeMemory:
     def __init__(
         self,
-        api_key: str,
+        embedding_api_key: str,
         persist_directory: str = "./faiss_index",
         index_filename: str = "index_knowledge.faiss",
         model: str = "BAAI/bge-large-zh-v1.5",
         dimension: int = 1024,  # 嵌入向量维度，需与模型输出维度一致
     ):
         # 嵌入模型
-        self.embeddings = SiliconFlowEmbeddings(api_key=api_key, model=model)
+        self.embeddings = SiliconFlowEmbeddings(api_key=embedding_api_key, model=model)
 
         # 持久化目录与文件名
         os.makedirs(persist_directory, exist_ok=True)

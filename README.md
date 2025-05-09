@@ -6,21 +6,17 @@
 
 #### **N**ot**Y**et**A**notherTurningTest
 
-[![GitHub Stars](https://img.shields.io/github/stars/shadow3aaa/nonebot-plugin-nyaturingtest?style=social)](
-
-<a href="./LICENSE">
-    <img src="https://img.shields.io/github/license/shadow3aaa/nonebot-plugin-nyaturingtest.svg" alt="license">
-</a>
-<a href="https://pypi.python.org/pypi/nonebot-plugin-nyaturingtest">
-    <img src="https://img.shields.io/pypi/v/nonebot-plugin-nyaturingtest.svg" alt="pypi">
-</a>
-<img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="python">
-<a href="https://github.com/astral-sh/ruff">
-    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json" alt="ruff">
-</a>
-<a href="https://github.com/astral-sh/uv">
-    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv">
-</a>
+<p>
+    <a href="https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest">
+        <img src="https://img.shields.io/github/stars/shadow3aaa/nonebot-plugin-nyaturingtest?style=social">
+    </a>
+    <a href="./LICENSE"><img src="https://img.shields.io/github/license/shadow3aaa/nonebot-plugin-nyaturingtest?style=flat-square" alt="license"></a>
+    <a href="https://pypi.python.org/pypi/nonebot-plugin-nyaturingtest"><img src="https://img.shields.io/pypi/v/nonebot-plugin-nyaturingtest?style=flat-square&logo=pypi&logoColor=white" alt="pypi"></a>
+    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square&logo=python&logoColor=white" alt="python">
+    <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/code%20style-ruff-black?style=flat-square&logo=ruff" alt="ruff"></a>
+    <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/package%20manager-uv-black?style=flat-square&logo=uv" alt="uv"></a>
+    <a href="https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest/commits/main"><img src="https://img.shields.io/github/last-commit/shadow3aaa/nonebot-plugin-nyaturingtest?style=flat-square&logo=github" alt="last-commit"></a>
+</p>
 </div>
 
 ## 📖 介绍
@@ -29,7 +25,7 @@
 
 ### 特点:
 
-- 具有基于VAD三维情感模型情感模块
+- 具有基于 VAD 三维情感模型情感模块
 - 具有基于向量搜索的长期记忆和知识
 - 能够从聊天信息中自主提取知识记忆
 - 能够考虑自身的情感状态和记忆自行选择要不要回复和回复内容，比较拟人
@@ -152,4 +148,3 @@
 ### 🎨 效果图
 
 别急
-

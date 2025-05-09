@@ -155,9 +155,9 @@ class Session:
             with open(self.get_session_file_path(), "w", encoding="utf-8") as f:
                 json.dump(session_data, f, ensure_ascii=False, indent=2)
 
-            logger.trace(f"[Session {self.id}] 会话状态已保存")
+            logger.debug(f"[Session {self.id}] 会话状态已保存")
         except Exception as e:
-            logger.trace(f"[Session {self.id}] 保存会话状态失败: {e}")
+            logger.debug(f"[Session {self.id}] 保存会话状态失败: {e}")
 
     def load_session(self):
         """
@@ -165,7 +165,7 @@ class Session:
         """
         file_path = self.get_session_file_path()
         if not os.path.exists(file_path):
-            logger.trace(f"[Session {self.id}] 会话文件不存在，使用默认状态")
+            logger.debug(f"[Session {self.id}] 会话文件不存在，使用默认状态")
             return
 
         try:
@@ -338,7 +338,7 @@ class Session:
 请严格遵守以上说明，输出符合格式的纯 JSON，不要添加任何额外的文字或解释。
 """
         score_response = llm(prompt)
-        logger.trace(f"LLM reply response: {score_response}")
+        logger.debug(f"LLM reply response: {score_response}")
         score_response = re.sub(r"^```json\s*|\s*```$", "", score_response)
         try:
             score_response_dict: dict[str, dict] = json.loads(score_response)
@@ -518,7 +518,7 @@ class Session:
 ```
 """  # noqa: E501
         score_response = llm(score_prompt)
-        logger.trace(f"LLM reply response: {score_response}")
+        logger.debug(f"LLM reply response: {score_response}")
         score_response = re.sub(r"^```json\s*|\s*```$", "", score_response)
         try:
             score_response_dict: dict[str, dict] = json.loads(score_response)
@@ -571,7 +571,7 @@ class Session:
 
                 # 回复阈值随机浮动在0.15-0.3之间
                 reply_threshold = random.uniform(0.15, 0.3)
-                logger.trace(f"Reply threshold: {reply_threshold}, reply desire: {reaction['reply_desire']}")
+                logger.debug(f"Reply threshold: {reply_threshold}, reply desire: {reaction['reply_desire']}")
                 if reaction["reply_desire"] >= reply_threshold:
                     new_messages_with_reply_tag[index]["want_reply"] = True
 
@@ -688,7 +688,7 @@ class Session:
         reply_response = re.sub(r"^```json\s*|\s*```$", "", reply_response)
         try:
             reply_response_dict: dict[str, list[str]] = json.loads(reply_response)
-            logger.trace(f"LLM reply response: {reply_response}")
+            logger.debug(f"LLM reply response: {reply_response}")
         except json.JSONDecodeError:
             raise ValueError("LLM response is not valid JSON, response: " + reply_response)
 
@@ -719,11 +719,11 @@ class Session:
                 mem.page_content for mem in self.global_long_term_memory.retrieve(" ".join(chunk_texts), k=8)
             ]
         except Exception as e:
-            logger.trace(f"Error: {e}")
+            logger.debug(f"Error: {e}")
             long_term_memory = []
 
-        logger.trace(f"搜索到的相关记忆：{long_term_memory}")
-        logger.trace(f"搜索到的相关知识：{knowledges}")
+        logger.debug(f"搜索到的相关记忆：{long_term_memory}")
+        logger.debug(f"搜索到的相关知识：{knowledges}")
 
         result = self.__core(
             message_chunk=message_chunk, knowledges=knowledges, long_term_memory=long_term_memory, llm=llm

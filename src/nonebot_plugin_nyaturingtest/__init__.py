@@ -66,7 +66,7 @@ async def spawn_state(state: GroupState):
         if len(state.message_chunk) == 0:
             continue
 
-        logger.trace(f"Processing message chunk: {state.message_chunk}")
+        logger.debug(f"Processing message chunk: {state.message_chunk}")
         message_chunk = state.message_chunk.copy()
         state.message_chunk.clear()
         try:

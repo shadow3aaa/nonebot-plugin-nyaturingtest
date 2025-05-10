@@ -699,11 +699,13 @@ dominance: {self.global_emotion.dominance}
                     "Feedback validation error: missing 'relationships' field in analyze_result: " + response
                 )
 
-            self.long_term_memory_events = response_dict["analyze_result"]["event"]
+            self.long_term_memory_events.add_texts(response_dict["analyze_result"]["event"])
             logger.debug(f"反馈阶段更新事件：{self.long_term_memory_events}")
-            self.long_term_memory_knowledge = response_dict["analyze_result"]["knowledge"]
+            self.long_term_memory_knowledge.add_texts(response_dict["analyze_result"]["knowledge"])
             logger.debug(f"反馈阶段更新知识：{self.long_term_memory_knowledge}")
-            self.long_term_memory_relationships = response_dict["analyze_result"]["relationships"]
+            self.long_term_memory_relationships.add_texts(
+                response_dict["analyze_result"]["relationships"]
+            )
             logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
 
             # 回复意愿

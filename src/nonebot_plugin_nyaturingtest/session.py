@@ -674,6 +674,8 @@ dominance: {self.global_emotion.dominance}
                     f"messages_chunk length ({len(messages_chunk)})"
                 )
             for index, message in enumerate(messages_chunk):
+                if message.user_name not in self.profiles:
+                    self.profiles[message.user_name] = PersonProfile(user_id=message.user_name)
                 self.profiles[message.user_name].push_interaction(
                     Impression(timestamp=datetime.now(), delta=response_dict["emotion_tends"][index])
                 )

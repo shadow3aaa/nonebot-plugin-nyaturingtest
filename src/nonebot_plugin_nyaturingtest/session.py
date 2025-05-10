@@ -647,6 +647,18 @@ dominance: {self.global_emotion.dominance}
         try:
             response_dict: dict[str, dict] = json.loads(response)
 
+            # Validate required fields
+            if "new_emotion" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'new_emotion' field in response: " + response)
+            if "emotion_tends" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'emotion_tends' field in response: " + response)
+            if "summary" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'summary' field in response: " + response)
+            if "analyze_result" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
+            if "reply_desire" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'reply_desire' field in response: " + response)
+
             # 更新自身情感
             self.global_emotion.valence = response_dict["new_emotion"]["valence"]
             self.global_emotion.arousal = response_dict["new_emotion"]["arousal"]
@@ -656,7 +668,11 @@ dominance: {self.global_emotion.dominance}
 
             # 更新情感倾向
             if len(response_dict["emotion_tends"]) != len(messages_chunk):
-                raise ValueError("LLM response is not valid, response: " + response)
+                raise ValueError(
+                    f"Feedback validation error: 'emotion_tends' array length "
+                    f"({len(response_dict['emotion_tends'])}) doesn't match "
+                    f"messages_chunk length ({len(messages_chunk)})"
+                )
             for index, message in enumerate(messages_chunk):
                 self.profiles[message.user_name].push_interaction(
                     Impression(timestamp=datetime.now(), delta=response_dict["emotion_tends"][index])
@@ -672,6 +688,15 @@ dominance: {self.global_emotion.dominance}
             logger.debug(f"反馈阶段更新聊天总结：{self.chat_summary}")
 
             # 更新长期记忆
+            if "event" not in response_dict["analyze_result"]:
+                raise ValueError("Feedback validation error: missing 'event' field in analyze_result: " + response)
+            if "knowledge" not in response_dict["analyze_result"]:
+                raise ValueError("Feedback validation error: missing 'knowledge' field in analyze_result: " + response)
+            if "relationships" not in response_dict["analyze_result"]:
+                raise ValueError(
+                    "Feedback validation error: missing 'relationships' field in analyze_result: " + response
+                )
+
             self.long_term_memory_events = response_dict["analyze_result"]["event"]
             logger.debug(f"反馈阶段更新事件：{self.long_term_memory_events}")
             self.long_term_memory_knowledge = response_dict["analyze_result"]["knowledge"]
@@ -680,20 +705,33 @@ dominance: {self.global_emotion.dominance}
             logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
 
             # 回复意愿
+            if "value" not in response_dict["reply_desire"]:
+                raise ValueError("Feedback validation error: missing 'value' field in reply_desire: " + response)
+            if "reply_index" not in response_dict["reply_desire"]:
+                raise ValueError("Feedback validation error: missing 'reply_index' field in reply_desire: " + response)
+
             reply_desire = response_dict["reply_desire"]["value"]
             reply_messages_index = response_dict["reply_desire"]["reply_index"]
             if not isinstance(reply_desire, float):
-                raise ValueError("LLM response is not valid, response: " + response)
+                raise ValueError("Feedback validation error: 'reply_desire.value' is not a float: " + str(reply_desire))
             if not isinstance(reply_messages_index, list):
-                raise ValueError("LLM response is not valid, response: " + response)
+                raise ValueError(
+                    "Feedback validation error: 'reply_desire.reply_index' is not a list: " + str(reply_messages_index)
+                )
 
             logger.debug(f"反馈阶段回复意愿：{reply_desire}")
             logger.debug(f"可能回复消息: {[messages_chunk[index] for index in reply_messages_index]}")
             logger.debug("反馈阶段结束")
 
             return _FeedbackResult(reply_desire=reply_desire, reply_messages_index=reply_messages_index)
-        except Exception:
-            raise ValueError("LLM response is not valid, response: " + response)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Feedback stage JSON parsing error: {e} in response: {response}")
+        except KeyError as e:
+            raise ValueError(f"Feedback stage missing key error: {e} in response: {response}")
+        except IndexError as e:
+            raise ValueError(f"Feedback stage index error: {e} in response: {response}")
+        except Exception as e:
+            raise ValueError(f"Feedback stage unexpected error: {e} in response: {response}")
 
     def __chat_stage(
         self,

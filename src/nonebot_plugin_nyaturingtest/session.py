@@ -169,7 +169,8 @@ class Session:
         """
         重置会话
         """
-        self.set_role("terminus", "一个男性人类")
+        self.__name = "terminus"
+        self.__role = "一个男性人类"
         self.global_memory = Memory()
         self.long_term_memory_history.clear()
         self.long_term_memory_knowledge.clear()

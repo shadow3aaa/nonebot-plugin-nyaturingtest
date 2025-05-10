@@ -681,7 +681,7 @@ dominance: {self.global_emotion.dominance}
 
             # 回复意愿
             reply_desire = response_dict["reply_desire"]["value"]
-            reply_messages_index = response_dict["reply_index"]
+            reply_messages_index = response_dict["reply_desire"]["reply_index"]
             if not isinstance(reply_desire, float):
                 raise ValueError("LLM response is not valid, response: " + response)
             if not isinstance(reply_messages_index, list):

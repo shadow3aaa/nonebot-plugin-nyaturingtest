@@ -43,7 +43,7 @@ class GroupState:
     session: Session = field(
         default_factory=lambda: Session(siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key)
     )
-    message_chunk: list[MMessage] = field(default_factory=list)
+    messages_chunk: list[MMessage] = field(default_factory=list)
     client = LLMClient(
         client=OpenAI(
             api_key=plugin_config.nyaturingtest_chat_openai_api_key,
@@ -63,19 +63,20 @@ async def spawn_state(state: GroupState):
         await asyncio.sleep(random.uniform(5.0, 10.0))  # 随机等待5-10秒模拟人类查看消息和理解，并且避免看不到连续消息
         if state.bot is None or state.event is None:
             continue
-        if len(state.message_chunk) == 0:
+        if len(state.messages_chunk) == 0:
             continue
 
-        logger.debug(f"Processing message chunk: {state.message_chunk}")
-        message_chunk = state.message_chunk.copy()
-        state.message_chunk.clear()
+        logger.debug(f"Processing message chunk: {state.messages_chunk}")
+        messages_chunk = state.messages_chunk.copy()
+        state.messages_chunk.clear()
         try:
-            responses = state.session.update(message_chunk=message_chunk, llm=lambda x: llm_response(state.client, x))
+            responses = state.session.update(messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x))
         except Exception as e:
             logger.error(f"Error: {e}")
             responses = ["发生错误，请稍后再试。"]
-        for response in responses:
-            await state.bot.send(message=response, event=state.event)
+        if responses:
+            for response in responses:
+                await state.bot.send(message=response, event=state.event)
 
 
 group_states: dict[int, GroupState] = {}
@@ -89,22 +90,39 @@ calm_down = on_command(rule=is_group_message, cmd="calm", aliases={"冷静"}, pr
 reset = on_command(rule=is_group_message, cmd="reset", aliases={"重置"}, priority=0, block=True)
 get_provider = on_command(rule=is_group_message, cmd="provider", priority=0, block=True)
 set_provider = on_command(rule=is_group_message, cmd="set_provider", priority=0, block=True)
-add_knowledge = on_command(rule=is_group_message, cmd="add_knowledge", priority=0, block=True)
+get_presets = on_command(rule=is_group_message, cmd="presets", priority=0, block=True)
+set_presets = on_command(rule=is_group_message, cmd="set_presets", priority=0, block=True)
 
 
-@add_knowledge.handle()
-async def handle_add_knowledge(event: GroupMessageEvent, args: Message = CommandArg()):
+@get_presets.handle()
+async def handle_get_presets(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await add_knowledge.finish("No active session found for this group.")
+        await get_presets.finish("No active session found for this group.")
     else:
         state = group_states[group_id]
-        knowledge = args.extract_plain_text().strip()
-        if knowledge:
-            state.session.add_knowledge(knowledge)
-            await add_knowledge.finish("知识已添加")
+        presets = state.session.presets()
+        msg = "可选的预设:\n"
+        for preset in presets:
+            msg += f"- {preset}\n"
+        msg += "使用方法: set_presets <预设名称> <预设内容>\n"
+        await get_presets.finish(msg)
+
+
+@set_presets.handle()
+async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandArg()):
+    group_id = event.group_id
+    if group_id not in group_states:
+        await set_presets.finish("No active session found for this group.")
+    else:
+        state = group_states[group_id]
+        if arg := args.extract_plain_text().strip():
+            if state.session.load_preset(arg):
+                await set_presets.finish(f"预设已加载: {arg}")
+            else:
+                await set_presets.finish(f"不存在的预设: {arg}")
         else:
-            await add_knowledge.finish("请提供要添加的知识")
+            await set_presets.finish("请提供预设名称")
 
 
 @get_provider.handle()
@@ -272,7 +290,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
     # 获取该群的状态
     group_states[group_id].event = event
     group_states[group_id].bot = bot
-    group_states[group_id].message_chunk.append(
+    group_states[group_id].messages_chunk.append(
         MMessage(
             time=datetime.now(),
             user_name=nickname,

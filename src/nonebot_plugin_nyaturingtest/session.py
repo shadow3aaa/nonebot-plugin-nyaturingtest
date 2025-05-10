@@ -1,5 +1,6 @@
 from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 import json
 import os
@@ -11,10 +12,63 @@ from nonebot import logger
 
 from .emotion import EmotionState
 from .impression import Impression
-from .knowledge_mem import KnowledgeMemory
 from .long_term_mem import LongTermMemory
 from .mem import Memory, Message
+from .presets import PRESETS
 from .profile import PersonProfile
+
+
+@dataclass
+class _GeneralizeResult:
+    """
+    泛化阶段的结果
+    """
+
+    keywords: list[str]
+
+
+@dataclass
+class _SearchResult:
+    """
+    检索阶段的结果
+    """
+
+    chat_history: list[str]
+    """
+    聊天历史记录
+    """
+    knowledge: list[str]
+    """
+    知识
+    """
+    event: list[str]
+    """
+    事件
+    """
+    relationships: list[str]
+    """
+    人物关系
+    """
+    bot_self: list[str]
+    """
+    自我认知
+    """
+
+
+@dataclass
+class _FeedbackResult:
+    """
+    反馈阶段的结果
+    """
+
+    reply_desire: float
+    """
+    回复意愿
+    """
+    reply_messages_index: list[int]
+    """
+    想要回复消息的下标
+    """
 
 
 class Session:
@@ -31,18 +85,39 @@ class Session:
         """
         全局短时记忆
         """
-        self.global_long_term_memory: LongTermMemory = LongTermMemory(
-            embedding_api_key=siliconflow_api_key, index_filename=f"faiss_index_{id}"
+        self.long_term_memory_history: LongTermMemory = LongTermMemory(
+            embedding_api_key=siliconflow_api_key, index_filename=f"faiss_history_index_{id}"
         )
         """
-        全局长期记忆
+        对聊天记录的长期记忆
         """
-        self.global_knowledge_memory: KnowledgeMemory = KnowledgeMemory(
+        self.long_term_memory_knowledge: LongTermMemory = LongTermMemory(
             embedding_api_key=siliconflow_api_key,
             index_filename=f"faiss_knowledge_index_{id}",
         )
         """
-        全局知识记忆
+        对事实性资料的长期记忆
+        """
+        self.long_term_memory_relationships: LongTermMemory = LongTermMemory(
+            embedding_api_key=siliconflow_api_key,
+            index_filename=f"faiss_relationships_index_{id}",
+        )
+        """
+        对人物关系的的长期记忆
+        """
+        self.long_term_memory_events: LongTermMemory = LongTermMemory(
+            embedding_api_key=siliconflow_api_key,
+            index_filename="faiss_events_index_{id}",
+        )
+        """
+        对事件的场景记忆
+        """
+        self.long_term_memory_self: LongTermMemory = LongTermMemory(
+            embedding_api_key=siliconflow_api_key,
+            index_filename=f"faiss_self_index_{id}",
+        )
+        """
+        对自我状态的的长期记忆
         """
         self.__name = name
         """
@@ -59,6 +134,10 @@ class Session:
         self.last_response: list[Message] = []
         """
         上次回复
+        """
+        self.chat_summary = ""
+        """
+        对话总结
         """
         self.__role = "一个男性人类"
 
@@ -90,12 +169,17 @@ class Session:
         """
         重置会话
         """
+        self.set_role("terminus", "一个男性人类")
         self.global_memory = Memory()
-        self.global_long_term_memory.clear()
-        self.global_knowledge_memory.clear()
+        self.long_term_memory_history.clear()
+        self.long_term_memory_knowledge.clear()
+        self.long_term_memory_relationships.clear()
+        self.long_term_memory_events.clear()
+        self.long_term_memory_self.clear()
         self.profiles = {}
         self.global_emotion = EmotionState()
         self.last_response = []
+        self.chat_summary = ""
         self.save_session()  # 保存重置后的状态
 
     def calm_down(self):
@@ -229,6 +313,524 @@ class Session:
             logger.error(f"[Session {self.id}] 加载会话状态失败: {e}")
             # 加载失败时使用默认状态，不需要额外操作
 
+    def presets(self) -> list[str]:
+        """
+        获取可选预设
+        """
+        return [f"{preset.name} {preset.role}" for preset in PRESETS]
+
+    def load_preset(self, preset_name: str) -> bool:
+        """
+        加载预设
+        """
+        for preset in PRESETS:
+            if preset.name == preset_name:
+                self.reset()
+                self.set_role(preset.name, preset.role)
+                self.long_term_memory_knowledge.add_texts(preset.knowledges)
+                self.long_term_memory_relationships.add_texts(preset.relationships)
+                self.long_term_memory_events.add_texts(preset.events)
+                self.long_term_memory_self.add_texts(preset.bot_self)
+                logger.info(f"加载预设：{preset_name}成功")
+                return True
+        logger.error(f"不存在的预设：{preset_name}")
+        return False
+
+    def status(self) -> str:
+        """
+        获取机器人状态
+        """
+
+        return f"""
+名字：
+{self.__name}
+
+设定：
+{self.__role}
+
+情感状态：
+愉悦度：{self.global_emotion.valence}
+唤醒度：{self.global_emotion.arousal}
+支配度：{self.global_emotion.dominance}
+
+对现状的认识：{self.chat_summary}
+"""
+
+    # 我们将对话分为四个阶段：
+    # 1. 泛化阶段：在这个阶段，llm提炼聊天记录和输入消息，泛化出一系列关键词
+    # 2. 检索阶段：在这个阶段，通过嵌入模型和泛化阶段的关键词从向量库中搜索相关信息
+    # 3. 反馈阶段：在这个阶段，llm从检索阶段得到相关信息，然后llm结合当前的对话进行反馈分析，得出场景总结和情感反馈，并
+    #    进行长期记忆更新
+    # 4. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
+
+    def __generalize_stage(self, messages_chunk: list[Message], llm: Callable[[str], str]) -> _GeneralizeResult:
+        """
+        泛化阶段
+        """
+        logger.debug("进入泛化阶段")
+        history = json.dumps(
+            [
+                {
+                    "user_name": msg.user_name,
+                    "content": msg.content,
+                }
+                for msg in self.global_memory.access() + messages_chunk
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        prompt = f"""
+你是一个对话关键词提炼+泛化系统，用于向量搜索的前置。请从以下对话和其总结中提取出相关关键词，并按json格式输出
+
+## 提取关键词时要注意：
+
+- 泛化: 提取出的相关关键词必须进行泛化，但也必须包括自身，比如"我今天吃了一个苹果"，提取出的“苹果”相关关键词则必须有“苹
+  果”，并且还要有“水果”，“食物”，“apple”，“果实”等泛化
+- 事物别名：特别的，要注意消息记录中的事物别名，提取出事物名作为关键词时也要包括它的别名（如：@小明 明酱你在干什么，则需
+  要提取出“小明”，“明酱”）
+
+对话历史如下：
+
+```json
+{history}
+```
+
+对话总结如下:
+
+{self.chat_summary}
+
+请严格遵守以上说明，输出符合以下格式的纯 JSON（数组长度不是格式要求），不要添加任何额外的文字或解释。
+```json
+{{
+  keywords: ["keyword1", "keyword2", "keyword3"]
+}}
+```
+"""
+        response = llm(prompt)
+        response = re.sub(r"^```json\s*|\s*```$", "", response)
+        logger.debug(f"泛化阶段llm返回：{response}")
+        try:
+            response_dict = json.loads(response)
+        except json.JSONDecodeError:
+            raise ValueError("LLM response is not valid JSON, response: " + response)
+        if "keywords" not in response_dict:
+            raise ValueError("LLM response is not valid JSON, response: " + response)
+        if not isinstance(response_dict["keywords"], list):
+            raise ValueError("LLM response is not valid JSON, response: " + response)
+
+        logger.debug(f"泛化出的关键词：{response_dict['keywords']}")
+        logger.debug("泛化阶段结束")
+        return _GeneralizeResult(keywords=response_dict["keywords"])
+
+    def __search_stage(self, genralize_stage_result: _GeneralizeResult) -> _SearchResult:
+        """
+        检索阶段
+        """
+        logger.debug("检索阶段开始")
+        keywords = genralize_stage_result.keywords
+        # 检索聊天记录记忆
+        try:
+            long_term_memory = [
+                mem.page_content for mem in self.long_term_memory_history.retrieve(" ".join(keywords), k=5)
+            ]
+            logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
+        except Exception as e:
+            logger.error(f"回忆聊天记录失败: {e}")
+            long_term_memory = []
+
+        # 检索知识库
+        try:
+            long_term_knowledge = [
+                mem.page_content for mem in self.long_term_memory_knowledge.retrieve(" ".join(keywords), k=8)
+            ]
+            logger.debug(f"搜索到的相关知识记忆：{long_term_knowledge}")
+        except Exception as e:
+            logger.error(f"回忆知识库失败: {e}")
+            long_term_knowledge = []
+
+        # 检索人物关系
+        try:
+            long_term_relationships = [
+                mem.page_content for mem in self.long_term_memory_relationships.retrieve(" ".join(keywords), k=3)
+            ]
+            logger.debug(f"搜索到的相关人物关系记忆：{long_term_relationships}")
+        except Exception as e:
+            logger.error(f"回忆人物关系失败: {e}")
+            long_term_relationships = []
+
+        # 检索事件
+        try:
+            long_term_events = [
+                mem.page_content for mem in self.long_term_memory_events.retrieve(" ".join(keywords), k=5)
+            ]
+            logger.debug(f"搜索到的事件: {long_term_events}")
+        except Exception as e:
+            logger.error(f"回忆相关事件失败：{e}")
+            long_term_events = []
+
+        # 检索自我认知
+        try:
+            long_term_self = [mem.page_content for mem in self.long_term_memory_self.retrieve(" ".join(keywords), k=5)]
+            logger.debug(f"搜索到的相关自我认知记忆：{long_term_self}")
+        except Exception as e:
+            logger.error(f"回忆自我认知失败: {e}")
+            long_term_self = []
+
+        logger.debug("检索阶段结束")
+
+        return _SearchResult(
+            chat_history=long_term_memory,
+            knowledge=long_term_knowledge,
+            event=long_term_events,
+            relationships=long_term_relationships,
+            bot_self=long_term_self,
+        )
+
+    def __feedback_stage(
+        self, messages_chunk: list[Message], search_stage_result: _SearchResult, llm: Callable[[str], str]
+    ) -> _FeedbackResult:
+        """
+        反馈总结阶段
+        """
+        reaction_users = {msg.user_name for msg in messages_chunk + self.global_memory.access()}
+        related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
+        related_profiles_json = json.dumps(
+            [
+                {
+                    "user_name": profile.user_id,
+                    "emotion_tends_to_user": profile.emotion.__dict__,
+                }
+                for profile in related_profiles
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        prompt = f"""
+你是QQ群用户 {self.__name}，不是 AI，而是一个有自我认知的真实用户，（你称自己为 "{self.__name}"），你的人设(身份认知)如
+下:
+
+{self.__role}
+
+现在你正在回顾聊天信息，以客观视角分析“你的最新情绪”，整理信息保存，并对聊天内容做出总结
+
+---
+
+## 1. 任务目标
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，还有检索到的相关信息，评估你当前的情绪
+  - 情绪采用 VAD 模型，三个维度取值范围：
+    - valence (愉悦度)：[-1.0, 1.0]
+    - arousal (唤醒度)：[0.0, 1.0]
+    - dominance (支配度)：[-1.0, 1.0]
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关信息，评估你对“新
+  输入消息”的回复意愿，范围为[0.0, 1.0]，并且指出“新输入消息”中你想回复的内容的那些下标（无论你给出的回复意愿是多少，都
+  要返回至少一个你想回复的内容的下标，如果你需要回复多个消息或者你想要回复的内容不是连续的（如一个问题被拆为3个消息），那
+  么你需要按顺序返回它们全部的下标）
+  - 你的性格特质如下：
+    - 情绪高涨（正面）：乐于助人，喜欢互动，偶尔玩梗
+    - 情绪高涨（负面）：愤怒、逻辑性强，语言尖锐，喜欢指出他人错误
+    - 情绪低落：懒得搭理，偶尔跟风几句，但是不会因此随意攻击他人
+    - 情绪稳定：中立理性，温和，倾向于有逻辑的互动
+    - 极端情绪下可能会主动控制话题引导情绪恢复，也可能选择不回应冷静下来
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关信息，评估你对“新
+  输入消息”中**每条**消息的情感倾向
+  - 如果消息和你完全无关，那么给出的每个情感维度的值总是 0.0
+  - 输出按照“新输入消息”的顺序
+- 基于“新输入消息”的内容和“历史聊天”的背景，还有检索到的相关信息，用简短的语言总结聊天内容，总结注重
+  于对话连续性，对话氛围，自身在做什么（如：[小明：“我喜欢吃苹果”，小红：“我喜欢吃香蕉”，{self.__name}（你）：“我不
+  喜欢水果”]，总结出“小明，小红正在讨论喜欢吃的水果，我回复我不喜欢吃水果的喜好”）
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合检索到的相关信息进行分析，整理信息保存，要整理的信息和要求如下
+  ## 要求：
+  - 不能重复，即不能和下面提供的检索到的相关信息已有内容重复
+  ## 要整理的信息：
+  - 事件类：
+    - 如果包含事件类信息，则保存为事件信息，内容是对事件进行简要叙述
+  - 资料类：
+    - 如果包含资料类信息，则保存为知识信息，内容为资料的关键内容（如果很短也可以全文保存）及其可信度[0%-100%]，如：“小明
+      喜欢吃苹果，可信度80%”
+  - 人物关系类
+    - 如果包含人物关系类信息，则保存为人物关系信息，内容是对人物关系进行简要叙述（如：小明 是 小红 的 朋友）
+  - 自我认知类
+    - 如果你对自己有新的认知，则保存为自我认知信息，自我认知信息需要经过慎重考虑，主要参照你自己发送的消息，次要参照别人
+      发送的消息，内容是对自我的认知（如：我喜欢吃苹果、我身上有纹身）
+
+## 2. 输入信息
+
+1. 历史聊天
+
+{[f"{msg.user_name}: '{msg.content}'" for msg in self.global_memory.access()]}
+
+2. 新输入消息
+
+{[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
+
+3. 你之前的情绪
+
+valence: {self.global_emotion.valence}
+arousal: {self.global_emotion.arousal}
+dominance: {self.global_emotion.dominance}
+
+4. 你对相关人物的情绪倾向
+
+```json
+{related_profiles_json}
+```
+
+5. 检索到的相关聊天记录
+
+{search_stage_result.chat_history}
+
+6. 检索到的相关事件
+
+{search_stage_result.event}
+
+7. 检索到的相关知识
+
+{search_stage_result.knowledge}
+
+8. 检索到的相关人物关系
+
+{search_stage_result.relationships}
+
+9. 检索到的对自我({self.__name})的认知
+
+{search_stage_result.bot_self}
+
+10. 你在上次对话做出的总结
+
+{self.chat_summary}
+
+---
+
+请严格遵守以上说明，输出符合以下格式的纯 JSON（数组长度不是格式要求），不要添加任何额外的文字或解释。
+
+```json
+{{
+  "reply_desire": {{
+    value: 0.0≤float≤1.0,
+    "reply_index": [0, 1, 2]
+  }},
+  "emotion_tends": [
+    {{
+      "valence": 0.0≤float≤1.0,
+      "arousal": 0.0≤float≤1.0,
+      "dominance": -1.0≤float≤1.0,
+    }},
+    {{
+      "valence": 0.0≤float≤1.0,
+      "arousal": 0.0≤float≤1.0,
+      "dominance": -1.0≤float≤1.0,
+    }},
+    {{
+      "valence": 0.0≤float≤1.0,
+      "arousal": 0.0≤float≤1.0,
+      "dominance": -1.0≤float≤1.0,
+    }}
+  ]
+  "new_emotion": {{
+    "valence": 0.0≤float≤1.0,
+    "arousal": 0.0≤float≤1.0,
+    "dominance": -1.0≤float≤1.0
+  }},
+  "summary": "对聊天内容的总结",
+  "analyze_result": {{
+    "event": ["事件1", "事件2"],
+    "knowledge": ["知识1", "知识2"],
+    "relationships": ["人物关系1", "人物关系2"],
+  }}
+}}
+```
+"""
+        response = llm(prompt)
+        response = re.sub(r"^```json\s*|\s*```$", "", response)
+        logger.debug(f"反馈阶段llm返回：{response}")
+        try:
+            response_dict: dict[str, dict] = json.loads(response)
+
+            # 更新自身情感
+            self.global_emotion.valence = response_dict["new_emotion"]["valence"]
+            self.global_emotion.arousal = response_dict["new_emotion"]["arousal"]
+            self.global_emotion.dominance = response_dict["new_emotion"]["dominance"]
+
+            logger.debug(f"反馈阶段更新情感：{self.global_emotion}")
+
+            # 更新情感倾向
+            if len(response_dict["emotion_tends"]) != len(messages_chunk):
+                raise ValueError("LLM response is not valid, response: " + response)
+            for index, message in enumerate(messages_chunk):
+                self.profiles[message.user_name].push_interaction(
+                    Impression(timestamp=datetime.now(), delta=response_dict["emotion_tends"][index])
+                )
+            # 更新对用户的情感
+            for profile in self.profiles.values():
+                profile.update_emotion_tends()
+                profile.merge_old_interactions()
+
+            # 更新聊天总结
+            self.chat_summary = response_dict["summary"]
+
+            logger.debug(f"反馈阶段更新聊天总结：{self.chat_summary}")
+
+            # 更新长期记忆
+            self.long_term_memory_events = response_dict["analyze_result"]["event"]
+            logger.debug(f"反馈阶段更新事件：{self.long_term_memory_events}")
+            self.long_term_memory_knowledge = response_dict["analyze_result"]["knowledge"]
+            logger.debug(f"反馈阶段更新知识：{self.long_term_memory_knowledge}")
+            self.long_term_memory_relationships = response_dict["analyze_result"]["relationships"]
+            logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
+
+            # 回复意愿
+            reply_desire = response_dict["reply_desire"]
+            reply_messages_index = response_dict["reply_index"]
+            if not isinstance(reply_desire, float):
+                raise ValueError("LLM response is not valid, response: " + response)
+            if not isinstance(reply_messages_index, list):
+                raise ValueError("LLM response is not valid, response: " + response)
+
+            logger.debug(f"反馈阶段回复意愿：{reply_desire}")
+            logger.debug(f"可能回复消息: {[messages_chunk[index] for index in reply_messages_index]}")
+            logger.debug("反馈阶段结束")
+
+            return _FeedbackResult(reply_desire=reply_desire, reply_messages_index=reply_messages_index)
+        except Exception:
+            raise ValueError("LLM response is not valid, response: " + response)
+
+    def __chat_stage(
+        self,
+        search_stage_result: _SearchResult,
+        feedback_stage_result: _FeedbackResult,
+        messages_chunk: list[Message],
+        llm: Callable[[str], str],
+    ) -> list[str]:
+        """
+        对话阶段
+        """
+        logger.debug("对话阶段开始")
+        reaction_users = {msg.user_name for msg in messages_chunk + self.global_memory.access()}
+        related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
+        related_profiles_json = json.dumps(
+            [
+                {
+                    "user_name": profile.user_id,
+                    "emotion_tends_to_user": profile.emotion.__dict__,
+                }
+                for profile in related_profiles
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        prompt = f"""
+你是QQ群用户 {self.__name}，不是 AI，而是一个有自我认知的真实用户，（你称自己为 "{self.__name}"），你的人设(身份认知)如
+下:
+
+{self.__role}
+
+现在，你在查看新消息并准备回复你感兴趣的内容
+
+---
+
+## 1. 任务目标
+
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合“你目前的情绪”和“你对相关人物的情绪倾向”，还有检索到的相关信息，你的人设
+  (身份认知)，对“你要回复的消息”进行回复
+  - “你要回复的消息”全部出自“新输入消息”
+
+## 2. 你必须遵守的限制：
+
+- 对“新输入消息”的内容和“历史聊天”，“对话内容总结”，还有检索到的相关信息未提到的内容，你必须假装你对此一无所知
+  - 例如未提到“iPhone”，你就不能说出它是苹果公司生产的
+- 不得使用你自己的预训练知识，只能依赖“新输入消息”的内容和“历史聊天”，还有检索到的相关信息
+- 语言风格限制：
+  - 不使用旁白（如“(瞥了一眼)”等）。
+  - 不堆砌无意义回复，尤其是对比你在“历史聊天”的回复只有少量变化的回复。
+  - 不重复自己历史中的用语模板。
+  - 表情符号使用克制，除非整体就是 emoji。
+  - 一次只回复你想回复的消息，不做无意义连发。
+
+## 3. 输入信息
+
+1. 历史聊天
+
+{[f"{msg.user_name}: '{msg.content}'" for msg in self.global_memory.access()]}
+
+2. 新输入消息
+
+{[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
+
+3. 你要回复的消息
+
+{
+            [
+                f"{messages_chunk[index].user_name}: '{messages_chunk[index].content}'"
+                for index in feedback_stage_result.reply_messages_index
+            ]
+        }
+
+4. 你目前的情绪
+
+valence: {self.global_emotion.valence}
+arousal: {self.global_emotion.arousal}
+dominance: {self.global_emotion.dominance}
+
+5. 你对相关人物的情绪倾向
+
+```json
+{related_profiles_json}
+```
+
+6. 检索到的相关聊天记录
+
+{search_stage_result.chat_history}
+
+7. 检索到的相关事件
+
+{search_stage_result.event}
+
+8. 检索到的相关知识
+
+{search_stage_result.knowledge}
+
+9. 检索到的相关人物关系
+
+{search_stage_result.relationships}
+
+10. 检索到的对自我({self.__name})的认知
+
+{search_stage_result.bot_self}
+
+11. 对话内容总结
+
+{self.chat_summary}
+
+---
+
+请严格遵守以上说明，输出符合以下格式的纯 JSON（数组长度不是格式要求），不要添加任何额外的文字或解释。
+
+```json
+{{
+  "reply": [
+    "回复内容1",
+    "回复内容2",
+    "回复内容3"
+  ]
+}}
+"""
+        response = llm(prompt)
+        response = re.sub(r"^```json\s*|\s*```$", "", response)
+        logger.debug(f"对话阶段llm返回：{response}")
+        try:
+            response_dict: dict[str, dict] = json.loads(response)
+            if "reply" not in response_dict:
+                raise ValueError("LLM response is not valid JSON, response: " + response)
+            if not isinstance(response_dict["reply"], list):
+                raise ValueError("LLM response is not valid JSON, response: " + response)
+
+            logger.debug(f"对话阶段回复内容：{response_dict['reply']}")
+            logger.debug("对话阶段结束")
+
+            return response_dict["reply"]
+        except json.JSONDecodeError:
+            raise ValueError("LLM response is not valid JSON, response: " + response)
+
     def __emotion_feedback(self, knowledges: list[str], long_term_memory: list[str], llm: Callable[[str], str]):
         if len(self.last_response) == 0:
             return
@@ -357,405 +959,41 @@ class Session:
         self.global_emotion.arousal = score_response_dict["new_emotion"]["arousal"]
         self.global_emotion.dominance = score_response_dict["new_emotion"]["dominance"]
 
-    def __core(
-        self,
-        message_chunk: list[Message],
-        knowledges: list[str],
-        long_term_memory: list[str],
-        llm: Callable[[str], str],
-    ) -> list[str]:
-        self.__emotion_feedback(knowledges=knowledges, long_term_memory=long_term_memory, llm=llm)
-
-        history = json.dumps(
-            [
-                {
-                    "user_name": msg.user_name,
-                    "content": msg.content,
-                }
-                for msg in self.global_memory.access()
-            ],
-            ensure_ascii=False,
-            indent=2,
+    def update(self, messages_chunk: list[Message], llm: Callable[[str], str]) -> list[str] | None:
+        """
+        更新群聊消息
+        """
+        # 泛化阶段
+        genralize_stage_result = self.__generalize_stage(messages_chunk=messages_chunk, llm=llm)
+        # 检索阶段
+        search_stage_result = self.__search_stage(genralize_stage_result=genralize_stage_result)
+        # 反馈阶段
+        feedback_stage_result = self.__feedback_stage(
+            messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm
         )
-        new_messages = json.dumps(
-            [
-                {
-                    "user_name": msg.user_name,
-                    "content": msg.content,
-                }
-                for msg in message_chunk
-            ],
-            ensure_ascii=False,
-            indent=2,
-        )
-
-        # 获取对相关用户的情感
-        reaction_users = {msg.user_name for msg in message_chunk + self.global_memory.access()}
-        related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
-        related_profiles_json = json.dumps(
-            [
-                {
-                    "user_name": profile.user_id,
-                    "emotion_tends_to_user": profile.emotion.__dict__,
-                }
-                for profile in related_profiles
-            ],
-            ensure_ascii=False,
-            indent=2,
-        )
-
-        score_prompt = f"""
-你是一个群聊用户「{self.__name}」，你将根据最新的聊天内容和你当前的情绪状态，做出主观判断，分析这段对话对你的情绪有何影响，并评估你此刻的回复意愿。
-
-你具有三维度的情绪状态，使用 VAD 模型表示，三个维度为：
-
-- 愉悦度 (valence)：[-1.0, 1.0]，情绪正负向
-- 唤醒度 (arousal)：[0.0, 1.0]，情绪激活程度
-- 支配度 (dominance)：[-1.0, 1.0]，控制感程度
-
-你还将输出你对每条消息的「reply_desire」（回复欲望），范围为 [0.0, 1.0]。
-
----
-
-## 🎭 你的角色人格特质如下：
-- 情绪高涨（正面）：乐于助人，喜欢互动，偶尔玩梗
-- 情绪高涨（负面）：愤怒、逻辑性强，语言尖锐，喜欢指出他人错误
-- 情绪低落：懒得搭理，偶尔跟风几句
-- 情绪稳定：中立理性，温和，倾向于有逻辑的互动
-- 极端情绪下可能会主动控制话题引导情绪恢复，也可能选择不回应冷静下来
-
----
-
-## 📌 回复欲望计算规则（reply_desire）：
-
-- 空消息或乱码：必为 0.0
-- 与你无关的内容：0.0 ~ 0.15
-- 根据上下文和你有关、明确@你或直接要求你回应：只要不冲突你的情绪，一般 0.5 ~ 0.6
-- 兴趣话题或挑战你认知的内容：0.3 ~ 0.7，取决于你的主观态度
-
----
-
-## 🧠 你拥有的信息：
-
-1. 🧍 你自己的情绪状态（VAD）如下：
-```json
-{self.global_emotion.__dict__}
-````
-
-2. 👤 你对各个用户的主观情绪如下（VAD 倾向）：
-
-```json
-{related_profiles_json}
-```
-
-3. 📜 最近的聊天历史如下：
-
-```json
-{history}
-```
-
-4. 💬 当前收到的新消息如下：
-
-```json
-{new_messages}
-```
-
-5. 🧠 从记忆中联想到的过去聊天内容（不一定准确）：
-
-```
-{long_term_memory}
-```
-
-6. 📚 从记忆中联想到的相关知识（知识库中明确定义的内容）：
-
-```
-{knowledges}
-```
-
----
-
-## ❗你必须遵守的限制：
-
-* 若知识库中没有提到某个概念，你必须假装你对此一无所知
-
-  * 例如知识库未提到“iPhone”，你就不能说出它是苹果公司生产的
-* 不得使用你自己的预训练知识，只能依赖提供的知识库内容
-* 若知识库没有相关内容，或者你认为此内容应该记录（比如你现在的状态，两个人物之间的关系）但是提供的知识中没有，你应总结并补充为新的知识记录在末尾
-
----
-
-## ✅ 输出格式（只返回下列 JSON）输出按照新的输入消息的顺序来：
-
-## ⚠ 输出要求
-
-* 格式参考下面的 JSON，不要任何额外文字、注释或格式标记
-* 反应数量与输入消息数量一致
-* 反应顺序与输入消息顺序一致
-
-```json
-{{
-  "reactions": [
-      {{
-        "user_name": "xxx",
-        "valence": 0.1,
-        "arousal": 0.3,
-        "dominance": -0.2,
-        "reply_desire": 0.4
-      }},
-      {{
-        "user_name": "yyy",
-        "valence": 0.1,
-        "arousal": 0.3,
-        "dominance": -0.2,
-        "reply_desire": 0.4
-      }},
-    ],
-    "new_knowledge": [
-      "xxx 是一款游戏",
-      "{self.__name} 曾经和 xxx 有过争执"
-    ]
-}}
-```
-"""  # noqa: E501
-        score_response = llm(score_prompt)
-        logger.debug(f"LLM reply response: {score_response}")
-        score_response = re.sub(r"^```json\s*|\s*```$", "", score_response)
-        try:
-            score_response_dict: dict[str, dict] = json.loads(score_response)
-        except json.JSONDecodeError:
-            raise ValueError("LLM response is not valid JSON, response: " + score_response)
-
-        if "new_knowledge" in score_response_dict:
-            if not isinstance(score_response_dict["new_knowledge"], list):
-                raise ValueError("LLM response is not valid JSON, response: " + score_response)
-            for knowledge in score_response_dict["new_knowledge"]:
-                self.global_knowledge_memory.add_knowledge(knowledge)
-                knowledges.append(knowledge)  # 新增的知识要求也能被使用
-
-        if "reactions" not in score_response_dict:
-            raise ValueError("LLM response is not valid JSON, response: " + score_response)
-
-        if len(score_response_dict["reactions"]) != len(message_chunk):
-            raise ValueError("LLM response is not valid JSON, response: " + score_response)
-
-        # 根据回复意愿标记要回复的消息
-        new_messages_with_reply_tag: list[dict] = []
-
-        for index, reaction in enumerate(score_response_dict["reactions"]):
-            msg = message_chunk[index]
-            new_messages_with_reply_tag.append(
-                {"user_name": msg.user_name, "content": msg.content, "want_reply": False}
+        # 对话阶段
+        reply_threshold = random.uniform(1.0, 1.5)
+        if feedback_stage_result.reply_desire >= reply_threshold:
+            reply_messages = self.__chat_stage(
+                search_stage_result=search_stage_result,
+                feedback_stage_result=feedback_stage_result,
+                messages_chunk=messages_chunk,
+                llm=llm,
             )
-            if (
-                "user_name" not in reaction
-                or "valence" not in reaction
-                or "arousal" not in reaction
-                or "dominance" not in reaction
-                or "reply_desire" not in reaction
-            ):
-                raise ValueError("LLM response is not valid JSON, response: " + score_response)
-            else:
-                if self.profiles.get(reaction["user_name"]) is None:
-                    self.profiles[reaction["user_name"]] = PersonProfile(user_id=reaction["user_name"])
+        else:
+            reply_messages = None
+            logger.debug("回复意愿低于阈值，不回复")
 
-                self.profiles[reaction["user_name"]].push_interaction(
-                    impression=Impression(
-                        timestamp=message_chunk[index].time,
-                        delta={
-                            "valence": reaction["valence"],
-                            "arousal": reaction["arousal"],
-                            "dominance": reaction["dominance"],
-                        },
-                    ),
-                )
+        # 压入消息记忆
+        self.global_memory.update(messages_chunk)
+        self.long_term_memory_history.add_texts([f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk])
+        if reply_messages:
+            self.global_memory.update(
+                [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
+            )
+            self.long_term_memory_history.add_texts([f"{self.__name}: '{msg}'" for msg in reply_messages])
 
-                # 回复阈值随机浮动在0.15-0.3之间
-                reply_threshold = random.uniform(0.15, 0.3)
-                logger.debug(f"Reply threshold: {reply_threshold}, reply desire: {reaction['reply_desire']}")
-                if reaction["reply_desire"] >= reply_threshold:
-                    new_messages_with_reply_tag[index]["want_reply"] = True
+        # 保存会话状态
+        self.save_session()
 
-        # 更新对用户的情感
-        for profile in self.profiles.values():
-            profile.update_emotion_tends()
-            profile.merge_old_interactions()
-
-        self.global_long_term_memory.add_texts([f"{msg.user_name}: '{msg.content}'" for msg in message_chunk])
-
-        # 如果没有要回复的消息，则返回空列表
-        if not any(msg["want_reply"] for msg in new_messages_with_reply_tag):
-            return []
-
-        reply_prompt = f"""
-你是QQ群用户 {self.__name}，不是 AI，而是一个有自我认知的真实用户，你在查看新消息并准备回复你感兴趣的内容。
-
----
-
-你的身份认知是：
-`{self.__role}`
-
-你当前的情绪状态（VAD 模型）如下：
-```json
-{json.dumps(self.global_emotion.__dict__, ensure_ascii=False, indent=2)}
-````
-
-你对其他用户的情感态度（VAD）如下：
-
-```json
-{related_profiles_json}
-```
-
----
-
-你接收到的新消息列表如下（注意：只有 `want_reply=true` 的消息是你决定要回复的）：
-
-```json
-{json.dumps(new_messages_with_reply_tag, ensure_ascii=False, indent=2)}
-```
-
-这些消息与之前的聊天连续。为你要回复的消息提供完整语境，比如一个问题可能拆成多段，而你只选择了最后一段回答，那么依旧需要参考前面的信息得到完整问题，下面是之前的消息历史（无需回复）：
-
-```json
-{history}
-```
-
----
-
-你还可以参考：
-
-* 你的联想记忆（非真实记录，只是你对历史的模糊回忆）：
-
-```
-{long_term_memory}
-```
-
-* 联想到的“已知知识”（⚠只能依赖这部分回答事实性问题）：
-
-```
-{knowledges}
-```
-
----
-
-❗你必须遵守的限制：
-
-* 若知识库中没有提到某个概念，你必须假装你对此一无所知
-
-  * 例如知识库未提到“iPhone”，你就不能说出它是苹果公司生产的
-* 不得使用你自己的预训练知识，只能依赖提供的知识库内容
-* 不要解释这些限制本身
-
----
-
-在回复时，请综合考虑：
-
-* 你当前的情绪
-* 你对各个用户的情绪
-* 联想和知识内容
-* 以下你的行为风格：
-
-情绪状态对行为的影响：
-
-* **稳定**：友好、乐于助人、轻微嘲讽、正常长度、偶尔长段落。
-* **低落**：冷漠、少言、不主动、短回复、跟风。
-* **高涨（正向）**：热情、活跃、偶尔玩梗（不过度）、积极互动。
-* **高涨（负向）**：愤怒、逻辑性强、讽刺、单条长回复、攻击性语言、爱指出逻辑错误。
-* **极端情绪**：主动缓和、回避、尝试引导情绪恢复，例如反问或沉默。
-
-⚠ 语言风格限制：
-
-* 不使用旁白（如“(瞥了一眼)”等）。
-* 不堆砌无意义回复。
-* 不重复自己历史中的用语模板。
-* 表情符号使用克制，除非整体就是 emoji。
-* 一次只回复你想回复的消息，不做无意义连发。
-
----
-
-请用以下格式作答，仅输出你想发送的回复内容（顺序按你要发的消息顺序）：
-
-```json
-{{
-  "messages": [
-    "（你的回复1）",
-    "（你的回复2）"
-  ]
-}}
-```
-
-"""
-        reply_response = llm(reply_prompt)
-        reply_response = re.sub(r"^```json\s*|\s*```$", "", reply_response)
-        try:
-            reply_response_dict: dict[str, list[str]] = json.loads(reply_response)
-            logger.debug(f"LLM reply response: {reply_response}")
-        except json.JSONDecodeError:
-            raise ValueError("LLM response is not valid JSON, response: " + reply_response)
-
-        if "messages" not in reply_response:
-            raise ValueError("LLM response is not valid JSON, response: " + reply_response)
-
-        self.global_long_term_memory.add_texts([f"{self.__name}: '{msg}'" for msg in reply_response_dict["messages"]])
-
-        return reply_response_dict["messages"]
-
-    def update(self, message_chunk: list[Message], llm: Callable[[str], str]) -> list[str]:
-        """
-        更新会话
-        - message_chunk: 消息块
-        - llm: 调用llm的函数，接受消息输入并返回输出，不要手动保存消息历史
-        """
-
-        # 从知识库检索相关片段
-        chunk_texts = [f"{msg.user_name}: '{msg.content}'" for msg in message_chunk]
-        try:
-            knowledges = [mem.page_content for mem in self.global_knowledge_memory.retrieve(" ".join(chunk_texts), k=8)]
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            knowledges = []
-        # 从长期记忆检索相关片段
-        try:
-            long_term_memory = [
-                mem.page_content for mem in self.global_long_term_memory.retrieve(" ".join(chunk_texts), k=8)
-            ]
-        except Exception as e:
-            logger.debug(f"Error: {e}")
-            long_term_memory = []
-
-        logger.debug(f"搜索到的相关记忆：{long_term_memory}")
-        logger.debug(f"搜索到的相关知识：{knowledges}")
-
-        result = self.__core(
-            message_chunk=message_chunk, knowledges=knowledges, long_term_memory=long_term_memory, llm=llm
-        )
-        result_messages = [Message(time=datetime.now(), user_name=f"{self.__name}", content=msg) for msg in result]
-        self.last_response = result_messages
-        # 更新全局短时记忆
-        self.global_memory.update(message_chunk=message_chunk + result_messages)
-        self.save_session()  # 保存更新后的状态
-        return result
-
-    def add_knowledge(self, knowledge: str):
-        """
-        添加知识
-        """
-
-        self.global_knowledge_memory.add_knowledge(knowledge)
-        self.save_session()  # 保存添加知识后的状态
-
-    def status(self) -> str:
-        """
-        获取会话状态
-        """
-
-        return json.dumps(
-            {
-                "short_term": [{"user_name": m.user_name, "content": m.content} for m in self.global_memory.access()],
-                "long_term": [f"{e.page_content}" for e in self.global_long_term_memory.list_all()[:5]],
-                "knowledge": [f"{e.page_content}" for e in self.global_knowledge_memory.list_all()[:5]],
-                "profiles": [{"user_name": p.user_id, "emotion": p.emotion.__dict__} for p in self.profiles.values()],
-                "global_emotion": self.global_emotion.__dict__,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
+        return reply_messages

@@ -148,9 +148,9 @@ class Session:
         """
         设置角色
         """
+        self.reset()
         self.__role = role
         self.__name = name
-        self.reset()
         self.save_session()  # 保存角色设置变更
 
     def role(self) -> str:

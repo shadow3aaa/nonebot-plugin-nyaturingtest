@@ -1,4 +1,8 @@
 from dataclasses import dataclass, field
+import json
+import os
+
+from nonebot import logger
 
 
 @dataclass
@@ -27,6 +31,10 @@ class RolePreset:
     """
     预设对自我的认知
     """
+    hidden: bool = False
+    """
+    是否在/presets输出隐藏预设
+    """
 
 
 _猫娘预设 = RolePreset(
@@ -48,4 +56,25 @@ _猫娘预设 = RolePreset(
     ],
 )
 
-PRESETS = [_猫娘预设]
+PRESETS = []
+
+
+def _load_presets_from_directory(directory: str = "./nya_presets"):
+    # 如果文件夹不存在就创建并且写入例子(_猫娘预设)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        with open(os.path.join(directory, "猫娘预设.json"), "w", encoding="utf-8") as f:
+            json.dump(_猫娘预设.__dict__, f, ensure_ascii=False, indent=4)
+    for filename in os.listdir(directory):
+        if filename.endswith(".json"):
+            path = os.path.join(directory, filename)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    preset = RolePreset(**data)
+                    PRESETS.append(preset)
+            except Exception as e:
+                logger.warning(f"无法加载预设 {filename}: {e}")
+
+# 模块导入时自动加载外部预设
+_load_presets_from_directory()

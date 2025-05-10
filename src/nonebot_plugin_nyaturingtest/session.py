@@ -318,7 +318,7 @@ class Session:
         """
         获取可选预设
         """
-        return [f"{preset.name} {preset.role}" for preset in PRESETS]
+        return [f"{preset.name} {preset.role}" for preset in PRESETS if not preset.hidden]
 
     def load_preset(self, preset_name: str) -> bool:
         """

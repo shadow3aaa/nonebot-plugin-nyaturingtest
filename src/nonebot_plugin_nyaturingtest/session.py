@@ -1073,7 +1073,7 @@ dominance: {self.global_emotion.dominance}
             messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm
         )
         # 对话阶段
-        reply_threshold = random.uniform(0.3, 0.5)
+        reply_threshold = random.uniform(0.35, 0.5)
         if feedback_stage_result.reply_desire >= reply_threshold:
             reply_messages = self.__chat_stage(
                 search_stage_result=search_stage_result,

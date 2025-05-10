@@ -318,24 +318,24 @@ class Session:
         """
         获取可选预设
         """
-        return [f"{preset.name} {preset.role}" for preset in PRESETS if not preset.hidden]
+        return [f"{filename}: {preset.name} {preset.role}" for filename, preset in PRESETS.items() if not preset.hidden]
 
-    def load_preset(self, preset_name: str) -> bool:
+    def load_preset(self, filename: str) -> bool:
         """
         加载预设
         """
-        for preset in PRESETS:
-            if preset.name == preset_name:
-                self.reset()
-                self.set_role(preset.name, preset.role)
-                self.long_term_memory_knowledge.add_texts(preset.knowledges)
-                self.long_term_memory_relationships.add_texts(preset.relationships)
-                self.long_term_memory_events.add_texts(preset.events)
-                self.long_term_memory_self.add_texts(preset.bot_self)
-                logger.info(f"加载预设：{preset_name}成功")
-                return True
-        logger.error(f"不存在的预设：{preset_name}")
-        return False
+        if filename not in PRESETS.keys():
+            logger.error(f"不存在的预设：{filename}")
+            return False
+        preset = PRESETS[filename]
+        self.reset()
+        self.set_role(preset.name, preset.role)
+        self.long_term_memory_knowledge.add_texts(preset.knowledges)
+        self.long_term_memory_relationships.add_texts(preset.relationships)
+        self.long_term_memory_events.add_texts(preset.events)
+        self.long_term_memory_self.add_texts(preset.bot_self)
+        logger.info(f"加载预设：{filename} 成功")
+        return True
 
     def status(self) -> str:
         """

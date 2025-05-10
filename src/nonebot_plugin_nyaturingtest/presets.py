@@ -56,14 +56,14 @@ _猫娘预设 = RolePreset(
     ],
 )
 
-PRESETS = []
+PRESETS: dict[str, RolePreset] = {}
 
 
 def _load_presets_from_directory(directory: str = "./nya_presets"):
     # 如果文件夹不存在就创建并且写入例子(_猫娘预设)
     if not os.path.exists(directory):
         os.makedirs(directory)
-        with open(os.path.join(directory, "猫娘预设.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(directory, "喵喵.json"), "w", encoding="utf-8") as f:
             json.dump(_猫娘预设.__dict__, f, ensure_ascii=False, indent=4)
     for filename in os.listdir(directory):
         if filename.endswith(".json"):
@@ -72,7 +72,7 @@ def _load_presets_from_directory(directory: str = "./nya_presets"):
                 with open(path, encoding="utf-8") as f:
                     data = json.load(f)
                     preset = RolePreset(**data)
-                    PRESETS.append(preset)
+                    PRESETS[filename] = preset
             except Exception as e:
                 logger.warning(f"无法加载预设 {filename}: {e}")
 

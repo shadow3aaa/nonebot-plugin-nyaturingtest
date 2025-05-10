@@ -174,7 +174,8 @@ async def handle_help(event: GroupMessageEvent):
 5. status - 获取状态
 6. provider - 获取当前提供商
 7. set_provider <提供者> - 设置提供商 (gemini/openai)
-8. add_knowledge <知识> - 添加知识
+8. set_presets <预设名称> <预设内容> - 设置预设
+9. presets - 获取可用预设
 9. help - 显示本帮助信息
 ",
 """

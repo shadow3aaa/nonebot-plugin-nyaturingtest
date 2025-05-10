@@ -107,7 +107,7 @@ class Session:
         """
         self.long_term_memory_events: LongTermMemory = LongTermMemory(
             embedding_api_key=siliconflow_api_key,
-            index_filename="faiss_events_index_{id}",
+            index_filename=f"faiss_events_index_{id}",
         )
         """
         对事件的场景记忆
@@ -492,6 +492,7 @@ class Session:
         """
         反馈总结阶段
         """
+        logger.debug("反馈阶段开始")
         reaction_users = {msg.user_name for msg in messages_chunk + self.global_memory.access()}
         related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
         related_profiles_json = json.dumps(
@@ -679,7 +680,7 @@ dominance: {self.global_emotion.dominance}
             logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
 
             # 回复意愿
-            reply_desire = response_dict["reply_desire"]
+            reply_desire = response_dict["reply_desire"]["value"]
             reply_messages_index = response_dict["reply_index"]
             if not isinstance(reply_desire, float):
                 raise ValueError("LLM response is not valid, response: " + response)

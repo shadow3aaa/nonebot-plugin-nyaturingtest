@@ -19,6 +19,7 @@ dependencies = [
   "openai>=1.77.0",
   "google-genai>=1.14.0",
   "asyncio>=3.4.3",
+  "uuid>=1.30",
 ]
 
 [dependency-groups]

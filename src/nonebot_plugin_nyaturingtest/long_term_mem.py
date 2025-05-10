@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from math import exp, log1p, sqrt
 import os
+import uuid
 
 import faiss  # Facebook AI Similarity Search 库 :contentReference[oaicite:0]{index=0}
 from langchain_community.docstore.in_memory import (
@@ -68,9 +69,10 @@ class LongTermMemory:
         if not texts:
             return
         now = self._now_str()
-        metadatas = [{"timestamp": now, "last_access": now, "access_count": 0} for _ in texts]
+        ids = [str(uuid.uuid4()) for _ in texts]
+        metadatas = [{"doc_id": id_, "timestamp": now, "last_access": now, "access_count": 0} for id_ in ids]
         try:
-            self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
+            self.vectorstore.add_texts(texts=texts, metadatas=metadatas, ids=ids)
         except HTTPError as e:
             logger.warning(f"Embedding failed ({e.response.status_code}): {e.response.text}")
         self.save()
@@ -84,16 +86,30 @@ class LongTermMemory:
         return docs
 
     def _update_metadata(self, docs: list[Document]):
+        now = self._now_str()
+        updated_docs = []
+        delete_ids = []
         for doc in docs:
             meta = doc.metadata
-            meta["last_access"] = self._now_str()
+            doc_id = meta.get("doc_id")
+            if not doc_id:
+                logger.warning("Document missing doc_id; skipping metadata update.")
+                continue
+            meta["last_access"] = now
             meta["access_count"] = meta.get("access_count", 0) + 1
-            self.vectorstore.delete(ids=[doc.id for doc in docs if doc.id is not None])
-            self.vectorstore.add_documents([doc])
+            delete_ids.append(doc_id)
+            updated_docs.append(Document(page_content=doc.page_content, metadata=meta))
+        if delete_ids:
+            self.vectorstore.delete(ids=delete_ids)
+        if updated_docs:
+            self.vectorstore.add_documents(updated_docs, ids=delete_ids)
+        self.save()
 
     def clear(self) -> None:
         docs_map = getattr(self.vectorstore.docstore, "_dict", None)
-        ids = list(docs_map.keys()) if docs_map else []
+        if not isinstance(docs_map, dict):
+            return
+        ids = [doc.metadata.get("doc_id") for doc in docs_map.values() if doc.metadata.get("doc_id")]
         if ids:
             self.vectorstore.delete(ids=ids)
             self.save()
@@ -119,8 +135,11 @@ class LongTermMemory:
         docstore = getattr(self.vectorstore.docstore, "_dict", None)
         if not isinstance(docstore, dict):
             return
-        for doc_id, doc in docstore.items():
+        for doc in docstore.values():
             meta = doc.metadata
+            doc_id = meta.get("doc_id")
+            if not doc_id:
+                continue  # 跳过无法识别的文档
             last = meta.get("last_access") or meta.get("timestamp")
             first = meta.get("timestamp") or last
             try:

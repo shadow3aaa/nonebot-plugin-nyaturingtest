@@ -12,6 +12,7 @@ from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
 )
 from nonebot.params import CommandArg
+from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 from openai import OpenAI
 
@@ -81,17 +82,29 @@ async def spawn_state(state: GroupState):
 
 group_states: dict[int, GroupState] = {}
 
-help = on_command(rule=is_group_message, cmd="help", aliases={"帮助"}, priority=0, block=True)
-get_status = on_command(rule=is_group_message, cmd="status", aliases={"状态"}, priority=0, block=True)
-auto_chat = on_message(rule=is_group_message, priority=1, block=False)
-set_role = on_command(rule=is_group_message, cmd="set_role", aliases={"设置角色"}, priority=0, block=True)
-get_role = on_command(rule=is_group_message, cmd="role", aliases={"当前角色"}, priority=0, block=True)
-calm_down = on_command(rule=is_group_message, cmd="calm", aliases={"冷静"}, priority=0, block=True)
-reset = on_command(rule=is_group_message, cmd="reset", aliases={"重置"}, priority=0, block=True)
-get_provider = on_command(rule=is_group_message, cmd="provider", priority=0, block=True)
-set_provider = on_command(rule=is_group_message, cmd="set_provider", priority=0, block=True)
-get_presets = on_command(rule=is_group_message, cmd="presets", priority=0, block=True)
-set_presets = on_command(rule=is_group_message, cmd="set_presets", priority=0, block=True)
+help = on_command(rule=is_group_message, permission=SUPERUSER, cmd="help", aliases={"帮助"}, priority=0, block=True)
+get_status = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="status", aliases={"状态"}, priority=0, block=True
+)
+auto_chat = on_message(rule=is_group_message, permission=SUPERUSER, priority=1, block=False)
+set_role = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="set_role", aliases={"设置角色"}, priority=0, block=True
+)
+get_role = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="role", aliases={"当前角色"}, priority=0, block=True
+)
+calm_down = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="calm", aliases={"冷静"}, priority=0, block=True
+)
+reset = on_command(rule=is_group_message, permission=SUPERUSER, cmd="reset", aliases={"重置"}, priority=0, block=True)
+get_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
+set_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
+get_presets = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="presets", aliases={"preset"}, priority=0, block=True
+)
+set_presets = on_command(
+    rule=is_group_message, permission=SUPERUSER, cmd="set_preset", aliases={"set_presets"}, priority=0, block=True
+)
 
 
 @get_presets.handle()

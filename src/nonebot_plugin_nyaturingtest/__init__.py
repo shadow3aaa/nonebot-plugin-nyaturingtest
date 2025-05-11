@@ -21,9 +21,9 @@ from .mem import Message as MMessage
 from .session import Session
 
 __plugin_meta__ = PluginMetadata(
-    name="名称",
-    description="描述",
-    usage="用法",
+    name="NYATuringTest",
+    description="群聊特化llm聊天机器人，具有长期记忆和情绪模拟能力",
+    usage="群聊特化llm聊天机器人，具有长期记忆和情绪模拟能力",
     type="application",
     homepage="https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest",
     config=Config,

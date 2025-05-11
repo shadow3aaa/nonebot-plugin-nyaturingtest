@@ -82,7 +82,6 @@ class LongTermMemory:
         docs = self.vectorstore.similarity_search(query, k=k)
         self._update_metadata(docs)
         self.save()
-        logger.debug(f"[Debug] Retrieved {docs} chat history documents.")
         return docs
 
     def _update_metadata(self, docs: list[Document]):

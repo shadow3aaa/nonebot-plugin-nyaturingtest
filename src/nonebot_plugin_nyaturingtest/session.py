@@ -764,9 +764,7 @@ dominance: {self.global_emotion.dominance}
             logger.debug(f"反馈阶段更新事件：{self.long_term_memory_events}")
             self.long_term_memory_knowledge.add_texts(response_dict["analyze_result"]["knowledge"])
             logger.debug(f"反馈阶段更新知识：{self.long_term_memory_knowledge}")
-            self.long_term_memory_relationships.add_texts(
-                response_dict["analyze_result"]["relationships"]
-            )
+            self.long_term_memory_relationships.add_texts(response_dict["analyze_result"]["relationships"])
             logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
 
             # 回复意愿
@@ -849,6 +847,9 @@ dominance: {self.global_emotion.dominance}
   - 不重复自己历史中的用语模板。
   - 表情符号使用克制，除非整体就是 emoji。
   - 一次只回复你想回复的消息，不做无意义连发。
+  - 不要在回复中重复表达信息
+  - 尽量精简回复消息数量，能用一个消息回复的就不要分成多个消息
+
 
 ## 3. 输入信息
 
@@ -912,9 +913,7 @@ dominance: {self.global_emotion.dominance}
 ```json
 {{
   "reply": [
-    "回复内容1",
-    "回复内容2",
-    "回复内容3"
+    "回复内容1"
   ]
 }}
 """

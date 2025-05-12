@@ -81,7 +81,7 @@ class Session:
         """
         会话ID，用于持久化时的标识
         """
-        self.global_memory: Memory = Memory(memory_limit=5)
+        self.global_memory: Memory = Memory()
         """
         全局短时记忆
         """
@@ -273,7 +273,7 @@ class Session:
                     self.global_memory = pickle.loads(bytes.fromhex(session_data["global_memory"]))
                 except Exception as e:
                     logger.error(f"[Session {self.id}] 恢复全局短时记忆失败: {e}")
-                    self.global_memory = Memory(memory_limit=5)
+                    self.global_memory = Memory()
 
             # 恢复用户档案
             self.profiles = {}

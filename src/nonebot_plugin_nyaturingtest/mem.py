@@ -1,3 +1,4 @@
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -23,37 +24,23 @@ class Memory:
     短时记忆
     """
 
-    def __init__(self, memory_limit: int = 30, length_limit: int = 20):
+    def __init__(self, length_limit: int = 20):
         """
         初始化记忆
         参数
 
-        - memory_limit: 记忆时间限制，单位分钟(默认30分钟)
+        - length_limit: 记忆消息长度限制
         """
-        self.__memory_limit = memory_limit
-        """
-        记忆时间限制，单位分钟(默认30分钟)
-        """
-        self.__length_limit = length_limit
-        """
-        记忆长度限制，单位条数(默认20条)
-        """
-        self.__messages: list[Message] = []
+        self.__messages: deque[Message] = deque(maxlen=length_limit)
         """
         记忆消息列表
         """
 
-    def access(self):
+    def access(self) -> list[Message]:
         """
         访问记忆
         """
-        now = datetime.now()
-        # 清除过期的记忆
-        self.__messages = [
-            msg for msg in self.__messages if (now - msg.time).total_seconds() / 60 < self.__memory_limit
-        ]
-        self.__messages = self.__messages[-self.__length_limit :]
-        return self.__messages
+        return list(self.__messages)
 
     def update(self, message_chunk: list[Message]):
         """
@@ -62,10 +49,4 @@ class Memory:
 
         - message_chunk: 消息块
         """
-        now = datetime.now()
-        # 清除过期的记忆
-        self.__messages = [
-            msg for msg in self.__messages if (now - msg.time).total_seconds() / 60 < self.__memory_limit
-        ]
-        # 添加新消息
         self.__messages.extend(message_chunk)

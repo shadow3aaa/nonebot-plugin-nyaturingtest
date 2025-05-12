@@ -976,7 +976,7 @@ dominance: {self.global_emotion.dominance}
                 [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
             )
             self.long_term_memory_history.add_texts(
-                texts=[msg.content for msg in messages_chunk],
+                texts=reply_messages,
                 metadatas=[
                     {
                         "sender": self.__name,

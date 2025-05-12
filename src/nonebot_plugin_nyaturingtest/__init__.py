@@ -464,6 +464,7 @@ async def message2BotMessage(group_id: int, message: Message, bot: Bot) -> str:
                 key = re.search(r"[?&]rkey=([a-zA-Z0-9_-]+)", url)
                 if key:
                     key = key.group(1)
+                    logger.debug(f"Image cache key: {key}")
                 else:
                     key = None
                     logger.warning("URL中没有找到rkey参数，无法缓存图片")

@@ -18,6 +18,7 @@ from openai import OpenAI
 
 from .client import LLMClient
 from .config import Config, plugin_config
+from .image_manager import image_manager
 from .mem import Message as MMessage
 from .session import Session
 
@@ -415,9 +416,9 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         task.add_done_callback(_tasks.discard)
 
     user_id = event.get_user_id()
-    message_content = event.get_plaintext()
-    if event.to_me:
-        message_content = f"@{group_states[group_id].session.name()} {message_content}"
+    message_content = message2BotMessage(event.get_message())
+    if not message_content:
+        return
 
     # 获取用户的昵称
     try:
@@ -436,3 +437,30 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
             content=message_content,
         )
     )
+
+def message2BotMessage(message: Message) -> str:
+    """
+    将消息转换为机器人可读的消息
+    """
+    message_content = ""
+    for seg in message:
+        if seg.type == "text":
+            message_content += f"{seg.data}"
+        elif seg.type == "image" or seg.type == "emoji":
+            if isinstance(seg.data, str):
+                description = image_manager.get_image_description(seg.data)
+                if description:
+                    message_content += f"\n[图片/表情: {description}]\n"
+                else:
+                    message_content += "\n[图片/表情，网卡了加载不出来]\n"
+            else:
+                message_content += "\n[图片/表情，网卡了加载不出来]\n"
+        elif seg.type == "at":
+            message_content += f"[@{seg.data}]"
+        elif seg.type == "reply":
+            # TODO: 处理回复消息
+            message_content += ""
+        else:
+            logger.warning(f"Unknown message type: {seg.type}")
+
+    return message_content.strip()

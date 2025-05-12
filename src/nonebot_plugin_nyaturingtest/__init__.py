@@ -86,7 +86,7 @@ help = on_command(rule=is_group_message, permission=SUPERUSER, cmd="help", alias
 get_status = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="status", aliases={"状态"}, priority=0, block=True
 )
-auto_chat = on_message(rule=is_group_message, permission=SUPERUSER, priority=1, block=False)
+auto_chat = on_message(rule=is_group_message, priority=1, block=False)
 set_role = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="set_role", aliases={"设置角色"}, priority=0, block=True
 )

@@ -44,6 +44,7 @@ __plugin_meta__ = PluginMetadata(
 async def is_group_message(event: Event) -> bool:
     return isinstance(event, GroupMessageEvent)
 
+
 async def is_private_message(event: Event) -> bool:
     return isinstance(event, PrivateMessageEvent)
 
@@ -129,9 +130,7 @@ reset_pm = on_command(
 get_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
 get_provider_pm = on_command(rule=is_private_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
 set_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
-set_provider_pm = on_command(
-    rule=is_private_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True
-)
+set_provider_pm = on_command(rule=is_private_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
 get_presets = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="presets", aliases={"preset"}, priority=0, block=True
 )
@@ -153,6 +152,7 @@ list_groups_pm = on_command(
 async def handle_get_presets(event: GroupMessageEvent):
     await do_get_presets(get_presets, event.group_id)
 
+
 @get_presets_pm.handle()
 async def handle_get_presets_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -160,6 +160,7 @@ async def handle_get_presets_pm(args: Message = CommandArg()):
         await get_presets_pm.finish("请提供<qq群号>")
     group_id = int(arg)
     await do_get_presets(get_presets_pm, group_id)
+
 
 async def do_get_presets(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -187,6 +188,7 @@ async def do_get_presets(matcher: type[Matcher], group_id: int):
     msg += "使用方法: set_presets <预设名称>\n"
     await matcher.finish(msg)
 
+
 @set_presets.handle()
 async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandArg()):
     file = args.extract_plain_text().strip()
@@ -194,6 +196,7 @@ async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandAr
         await set_presets.finish("请提供<预设文件名>")
     group_id = event.group_id
     await do_set_presets(set_presets, group_id, file)
+
 
 @set_presets_pm.handle()
 async def handle_set_presets_pm(args: Message = CommandArg()):
@@ -204,6 +207,7 @@ async def handle_set_presets_pm(args: Message = CommandArg()):
     file = preset_args[1]
 
     await do_set_presets(set_presets_pm, group_id, file)
+
 
 async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
     if group_id not in group_states:
@@ -235,6 +239,7 @@ async def handle_get_provider(event: GroupMessageEvent):
     group_id = event.group_id
     await do_get_provider(get_provider, group_id)
 
+
 @get_provider_pm.handle()
 async def handle_get_provider_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -242,6 +247,7 @@ async def handle_get_provider_pm(args: Message = CommandArg()):
         await get_provider_pm.finish("请提供<qq群号>")
     group_id = int(arg)
     await do_get_provider(get_provider_pm, group_id)
+
 
 async def do_get_provider(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -265,6 +271,7 @@ async def do_get_provider(matcher: type[Matcher], group_id: int):
     provider = state.client.type
     await matcher.finish(f"当前提供者: {provider}")
 
+
 @set_provider.handle()
 async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
@@ -272,6 +279,7 @@ async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandA
     if provider == "":
         await set_provider.finish("请提供<提供者>")
     await do_set_provider(set_provider, group_id, provider)
+
 
 @set_provider_pm.handle()
 async def handle_set_provider_pm(args: Message = CommandArg()):
@@ -281,6 +289,7 @@ async def handle_set_provider_pm(args: Message = CommandArg()):
     group_id = int(preset_args[0])
     provider = preset_args[1]
     await do_set_provider(set_provider_pm, group_id, provider)
+
 
 async def do_set_provider(matcher: type[Matcher], group_id: int, provider: str):
     if group_id not in group_states:
@@ -334,6 +343,7 @@ async def handle_help():
 """
     await help.finish(help_message)
 
+
 @help_pm.handle()
 async def handle_help_pm():
     help_message = """
@@ -353,6 +363,7 @@ async def handle_help_pm():
 """
     await help_pm.finish(help_message)
 
+
 @set_role.handle()
 async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()):
     role_args = args.extract_plain_text().strip().split(" ")
@@ -363,6 +374,7 @@ async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()
     role = role_args[1]
     await do_set_role(set_role, group_id, name, role)
 
+
 @set_role_pm.handle()
 async def handle_set_role_pm(args: Message = CommandArg()):
     role_args = args.extract_plain_text().strip().split(" ")
@@ -372,6 +384,7 @@ async def handle_set_role_pm(args: Message = CommandArg()):
     name = role_args[1]
     role = role_args[2]
     await do_set_role(set_role_pm, group_id, name, role)
+
 
 async def do_set_role(matcher: type[Matcher], group_id: int, name: str, role: str):
     if group_id not in group_states:
@@ -401,6 +414,7 @@ async def handle_get_role(event: GroupMessageEvent):
     group_id = event.group_id
     await do_get_role(get_role, group_id)
 
+
 @get_role_pm.handle()
 async def handle_get_role_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -408,6 +422,7 @@ async def handle_get_role_pm(args: Message = CommandArg()):
         await get_role_pm.finish("请提供<群号>")
     group_id = int(arg)
     await do_get_role(get_role_pm, group_id)
+
 
 async def do_get_role(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -437,6 +452,7 @@ async def handle_calm_down(event: GroupMessageEvent):
     group_id = event.group_id
     await do_calm_down(calm_down, group_id)
 
+
 @calm_down_pm.handle()
 async def handle_calm_down_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -444,6 +460,7 @@ async def handle_calm_down_pm(args: Message = CommandArg()):
         await calm_down_pm.finish("请提供<群号>")
     group_id = int(arg)
     await do_calm_down(calm_down_pm, group_id)
+
 
 async def do_calm_down(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -473,6 +490,7 @@ async def handle_reset(event: GroupMessageEvent):
     group_id = event.group_id
     await do_reset(reset, group_id)
 
+
 @reset_pm.handle()
 async def handle_reset_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -480,6 +498,7 @@ async def handle_reset_pm(args: Message = CommandArg()):
         await reset_pm.finish("请提供<群号>")
     group_id = int(arg)
     await do_reset(reset_pm, group_id)
+
 
 async def do_reset(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -508,6 +527,7 @@ async def handle_status(event: GroupMessageEvent):
     group_id = event.group_id
     await do_status(get_status, group_id)
 
+
 @get_status_pm.handle()
 async def handle_status_pm(args: Message = CommandArg()):
     arg = args.extract_plain_text().strip()
@@ -515,6 +535,7 @@ async def handle_status_pm(args: Message = CommandArg()):
         await get_status_pm.finish("请提供<群号>")
     group_id = int(arg)
     await do_status(get_status_pm, group_id)
+
 
 async def do_status(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
@@ -536,6 +557,7 @@ async def do_status(matcher: type[Matcher], group_id: int):
 
     state = group_states[group_id]
     await matcher.finish(state.session.status())
+
 
 @list_groups_pm.handle()
 async def handle_list_groups_pm():
@@ -582,7 +604,9 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         task.add_done_callback(_tasks.discard)
 
     user_id = event.get_user_id()
-    message_content = await message2BotMessage(group_id=group_id, message=event.get_message(), bot=bot)
+    message_content = await message2BotMessage(
+        bot_name=group_states[group_id].session.name(), group_id=group_id, message=event.get_message(), bot=bot
+    )
     if not message_content:
         return
 
@@ -605,7 +629,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
     )
 
 
-async def message2BotMessage(group_id: int, message: Message, bot: Bot) -> str:
+async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot: Bot) -> str:
     """
     将消息转换为机器人可读的消息
     """
@@ -657,9 +681,13 @@ async def message2BotMessage(group_id: int, message: Message, bot: Bot) -> str:
             id = seg.data.get("qq", "")
             if id == "":
                 continue
-            user_info = await bot.get_group_member_info(group_id=group_id, user_id=int(id))
-            nickname = user_info.get("card") or user_info.get("nickname") or str(id)
-            message_content += f" @{nickname} "
+            if id == str(bot.self_id):
+                # 由于机器人名并不等于qq群名，这里覆盖为设定名(bot_name)
+                message_content += f" @{bot_name} "
+            else:
+                user_info = await bot.get_group_member_info(group_id=group_id, user_id=int(id))
+                nickname = user_info.get("card") or user_info.get("nickname") or str(id)
+                message_content += f" @{nickname} "
         elif seg.type == "reply":
             # TODO: 处理回复消息
             message_content += ""

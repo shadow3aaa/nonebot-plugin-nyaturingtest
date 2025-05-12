@@ -111,7 +111,21 @@ set_presets = on_command(
 async def handle_get_presets(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await get_presets.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         presets = state.session.presets()
@@ -126,7 +140,21 @@ async def handle_get_presets(event: GroupMessageEvent):
 async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
     if group_id not in group_states:
-        await set_presets.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         if arg := args.extract_plain_text().strip():
@@ -142,7 +170,21 @@ async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandAr
 async def handle_get_provider(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await get_provider.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         provider = state.client.type
@@ -153,7 +195,21 @@ async def handle_get_provider(event: GroupMessageEvent):
 async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
     if group_id not in group_states:
-        await set_provider.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         provider = args.extract_plain_text().strip()
@@ -199,7 +255,21 @@ async def handle_help(event: GroupMessageEvent):
 async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
     if group_id not in group_states:
-        await set_role.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         if arg := args.extract_plain_text().strip():
@@ -217,7 +287,21 @@ async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()
 async def handle_get_role(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await get_role.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         role = state.session.role()
@@ -228,7 +312,21 @@ async def handle_get_role(event: GroupMessageEvent):
 async def handle_calm_down(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await calm_down.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         state.session.calm_down()
@@ -239,7 +337,21 @@ async def handle_calm_down(event: GroupMessageEvent):
 async def handle_reset(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await reset.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         state.session.reset()
@@ -250,7 +362,21 @@ async def handle_reset(event: GroupMessageEvent):
 async def handle_status(event: GroupMessageEvent):
     group_id = event.group_id
     if group_id not in group_states:
-        await get_status.finish("No active session found for this group.")
+        allowed_groups = plugin_config.nyaturingtest_enabled_groups
+        if group_id not in allowed_groups:
+            return
+
+        # 如果第一次创建会话，拉起循环处理线程
+        if group_id not in group_states:
+            group_states[group_id] = GroupState(
+                session=Session(
+                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
+                )
+            )
+            global _tasks
+            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
     else:
         state = group_states[group_id]
         await get_status.finish(state.session.status())

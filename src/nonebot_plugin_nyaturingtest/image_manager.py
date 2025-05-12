@@ -12,7 +12,7 @@ from nonebot_plugin_nyaturingtest.vlm import SiliconFlowVLM
 
 from .config import plugin_config
 
-_IMAGE_CACHE_DIR = Path("image_cache")
+IMAGE_CACHE_DIR = Path("image_cache")
 
 
 class ImageManager:
@@ -35,7 +35,7 @@ class ImageManager:
                 api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key,
                 model="Pro/Qwen/Qwen2.5-VL-7B-Instruct",
             )
-            _IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             self._initialized = True
 
     def _calculate_image_hash(self, image: bytes) -> str:
@@ -53,7 +53,7 @@ class ImageManager:
         # 计算图片的SHA256哈希值
         image_hash = self._calculate_image_hash(image_bytes)
         # 检查缓存
-        cache = _IMAGE_CACHE_DIR.joinpath(f"{image_hash}.json")
+        cache = IMAGE_CACHE_DIR.joinpath(f"{image_hash}.json")
         if cache.exists():
             with open(cache, encoding="utf-8") as f:
                 image_with_desc_raw = f.read()

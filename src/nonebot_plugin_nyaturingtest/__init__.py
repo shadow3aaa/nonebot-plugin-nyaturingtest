@@ -1,9 +1,14 @@
 import asyncio
+import base64
 from dataclasses import dataclass, field
 from datetime import datetime
 import random
+import re
+import ssl
 
+import anyio
 from google import genai
+import httpx
 from nonebot import logger, on_command, on_message
 from nonebot.adapters import Message
 from nonebot.adapters.onebot.v11 import (
@@ -18,7 +23,7 @@ from openai import OpenAI
 
 from .client import LLMClient
 from .config import Config, plugin_config
-from .image_manager import image_manager
+from .image_manager import IMAGE_CACHE_DIR, image_manager
 from .mem import Message as MMessage
 from .session import Session
 
@@ -416,7 +421,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         task.add_done_callback(_tasks.discard)
 
     user_id = event.get_user_id()
-    message_content = message2BotMessage(event.get_message())
+    message_content = await message2BotMessage(group_id=group_id, message=event.get_message(), bot=bot)
     if not message_content:
         return
 
@@ -438,25 +443,61 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         )
     )
 
-def message2BotMessage(message: Message) -> str:
+
+async def message2BotMessage(group_id: int, message: Message, bot: Bot) -> str:
     """
     将消息转换为机器人可读的消息
     """
     message_content = ""
     for seg in message:
         if seg.type == "text":
-            message_content += f"{seg.data}"
+            message_content += f"{seg.data.get('text', '')}"
         elif seg.type == "image" or seg.type == "emoji":
-            if isinstance(seg.data, str):
-                description = image_manager.get_image_description(seg.data)
+            try:
+                url = seg.data.get("url", "")
+                logger.debug(f"Image URL: {url}")
+
+                # 缓存临时目录
+                cache_path = IMAGE_CACHE_DIR.joinpath("raw")
+                cache_path.mkdir(parents=True, exist_ok=True)
+
+                key = re.search(r"[?&]rkey=([a-zA-Z0-9_-]+)", url)
+                if key:
+                    key = key.group(1)
+                else:
+                    key = None
+                    logger.warning("URL中没有找到rkey参数，无法缓存图片")
+
+                if key and cache_path.joinpath(key).exists():
+                    async with await anyio.open_file(cache_path.joinpath(key), "rb") as f:
+                        image_bytes = await f.read()
+                else:
+                    # 哈基qq欠安全了
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+                    ssl_context.set_ciphers("ALL:@SECLEVEL=1")
+                    async with httpx.AsyncClient(verify=ssl_context) as client:
+                        response = await client.get(url)
+                        response.raise_for_status()
+                        image_bytes = response.content
+                    # 缓存
+                    if key:
+                        async with await anyio.open_file(cache_path.joinpath(key), "wb") as f:
+                            await f.write(image_bytes)
+
+                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                description = image_manager.get_image_description(image_base64=image_base64)
                 if description:
                     message_content += f"\n[图片/表情: {description}]\n"
-                else:
-                    message_content += "\n[图片/表情，网卡了加载不出来]\n"
-            else:
+            except Exception as e:
+                logger.error(f"Error: {e}")
                 message_content += "\n[图片/表情，网卡了加载不出来]\n"
         elif seg.type == "at":
-            message_content += f"[@{seg.data}]"
+            id = seg.data.get("qq", "")
+            if id == "":
+                continue
+            user_info = await bot.get_group_member_info(group_id=group_id, user_id=int(id))
+            nickname = user_info.get("card") or user_info.get("nickname") or str(id)
+            message_content += f" @{nickname} "
         elif seg.type == "reply":
             # TODO: 处理回复消息
             message_content += ""

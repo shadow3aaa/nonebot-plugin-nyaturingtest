@@ -16,7 +16,7 @@ class SiliconFlowVLM:
         self,
         api_key: str,
         model: str = "Qwen/Qwen2.5-VL-32B-Instruct",
-        endpoint: str = "https://api.siliconflow.cn/v1/chat/completions",
+        endpoint: str = "https://api.siliconflow.cn/v1",
         timeout: int = 60,
         max_retries: int = 3,
         retry_delay: float = 1.0,

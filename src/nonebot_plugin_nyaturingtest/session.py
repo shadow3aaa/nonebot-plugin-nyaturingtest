@@ -217,6 +217,7 @@ class Session:
                     "arousal": self.global_emotion.arousal,
                     "dominance": self.global_emotion.dominance,
                 },
+                "chat_summary": self.chat_summary,
                 "profiles": {
                     user_id: {
                         "user_id": profile.user_id,
@@ -274,6 +275,9 @@ class Session:
                 except Exception as e:
                     logger.error(f"[Session {self.id}] 恢复全局短时记忆失败: {e}")
                     self.global_memory = Memory()
+            
+            # 恢复聊天总结
+            self.chat_summary = session_data.get("chat_summary", "")
 
             # 恢复用户档案
             self.profiles = {}

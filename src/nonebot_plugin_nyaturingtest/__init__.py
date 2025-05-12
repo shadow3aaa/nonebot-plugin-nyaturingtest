@@ -126,14 +126,14 @@ async def handle_get_presets(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        presets = state.session.presets()
-        msg = "可选的预设:\n"
-        for preset in presets:
-            msg += f"- {preset}\n"
-        msg += "使用方法: set_presets <预设名称> <预设内容>\n"
-        await get_presets.finish(msg)
+
+    state = group_states[group_id]
+    presets = state.session.presets()
+    msg = "可选的预设:\n"
+    for preset in presets:
+        msg += f"- {preset}\n"
+    msg += "使用方法: set_presets <预设名称> <预设内容>\n"
+    await get_presets.finish(msg)
 
 
 @set_presets.handle()
@@ -155,15 +155,15 @@ async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandAr
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        if arg := args.extract_plain_text().strip():
-            if state.session.load_preset(arg):
-                await set_presets.finish(f"预设已加载: {arg}")
-            else:
-                await set_presets.finish(f"不存在的预设: {arg}")
+
+    state = group_states[group_id]
+    if arg := args.extract_plain_text().strip():
+        if state.session.load_preset(arg):
+            await set_presets.finish(f"预设已加载: {arg}")
         else:
-            await set_presets.finish("请提供预设名称")
+            await set_presets.finish(f"不存在的预设: {arg}")
+    else:
+        await set_presets.finish("请提供预设名称")
 
 
 @get_provider.handle()
@@ -185,10 +185,10 @@ async def handle_get_provider(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        provider = state.client.type
-        await get_provider.finish(f"当前提供者: {provider}")
+
+    state = group_states[group_id]
+    provider = state.client.type
+    await get_provider.finish(f"当前提供者: {provider}")
 
 
 @set_provider.handle()
@@ -210,22 +210,22 @@ async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandA
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        provider = args.extract_plain_text().strip()
-        if provider in ["gemini", "openai"]:
-            if provider == "gemini":
-                state.client = LLMClient(client=genai.Client(api_key=plugin_config.nyaturingtest_chat_gemini_api_key))
-            elif provider == "openai":
-                state.client = LLMClient(
-                    client=OpenAI(
-                        api_key=plugin_config.nyaturingtest_chat_openai_api_key,
-                        base_url=plugin_config.nyaturingtest_chat_openai_base_url,
-                    )
+
+    state = group_states[group_id]
+    provider = args.extract_plain_text().strip()
+    if provider in ["gemini", "openai"]:
+        if provider == "gemini":
+            state.client = LLMClient(client=genai.Client(api_key=plugin_config.nyaturingtest_chat_gemini_api_key))
+        elif provider == "openai":
+            state.client = LLMClient(
+                client=OpenAI(
+                    api_key=plugin_config.nyaturingtest_chat_openai_api_key,
+                    base_url=plugin_config.nyaturingtest_chat_openai_base_url,
                 )
-            await set_provider.finish(f"已设置提供者为: {provider}")
-        else:
-            await set_provider.finish("无效的提供者，请选择 'gemini' 或 'openai'")
+            )
+        await set_provider.finish(f"已设置提供者为: {provider}")
+    else:
+        await set_provider.finish("无效的提供者，请选择 'gemini' 或 'openai'")
 
 
 @help.handle()
@@ -270,17 +270,17 @@ async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        if arg := args.extract_plain_text().strip():
-            role_rags = arg.split(" ", 1)
-            if len(role_rags) == 2:
-                state.session.set_role(role_rags[0], role_rags[1])
-                await set_role.finish(f"角色已设为: {role_rags[0]}\n设定: {role_rags[1]}")
-            else:
-                await set_role.finish("请提供角色名和角色设定")
+
+    state = group_states[group_id]
+    if arg := args.extract_plain_text().strip():
+        role_rags = arg.split(" ", 1)
+        if len(role_rags) == 2:
+            state.session.set_role(role_rags[0], role_rags[1])
+            await set_role.finish(f"角色已设为: {role_rags[0]}\n设定: {role_rags[1]}")
         else:
-            await set_role.finish("请提供角色描述")
+            await set_role.finish("请提供角色名和角色设定")
+    else:
+        await set_role.finish("请提供角色描述")
 
 
 @get_role.handle()
@@ -302,10 +302,10 @@ async def handle_get_role(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        role = state.session.role()
-        await get_role.finish(f"当前角色: {role}")
+
+    state = group_states[group_id]
+    role = state.session.role()
+    await get_role.finish(f"当前角色: {role}")
 
 
 @calm_down.handle()
@@ -327,10 +327,10 @@ async def handle_calm_down(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        state.session.calm_down()
-        await calm_down.finish("已老实")
+
+    state = group_states[group_id]
+    state.session.calm_down()
+    await calm_down.finish("已老实")
 
 
 @reset.handle()
@@ -352,10 +352,9 @@ async def handle_reset(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        state.session.reset()
-        await reset.finish("已重置会话")
+    state = group_states[group_id]
+    state.session.reset()
+    await reset.finish("已重置会话")
 
 
 @get_status.handle()
@@ -377,9 +376,9 @@ async def handle_status(event: GroupMessageEvent):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    else:
-        state = group_states[group_id]
-        await get_status.finish(state.session.status())
+
+    state = group_states[group_id]
+    await get_status.finish(state.session.status())
 
 
 def llm_response(client: LLMClient, message: str) -> str:

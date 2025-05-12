@@ -65,14 +65,27 @@ class LongTermMemory:
         """持久化 FAISS 索引和 docstore 到本地文件夹。"""
         self.vectorstore.save_local(folder_path=self.persist_directory, index_name=os.path.basename(self.index_path))
 
-    def add_texts(self, texts: list[str]) -> None:
+    def add_texts(self, texts: list[str], metadatas: list[dict] | None = None,) -> None:
         if not texts:
             return
         now = self._now_str()
         ids = [str(uuid.uuid4()) for _ in texts]
-        metadatas = [{"doc_id": id_, "timestamp": now, "last_access": now, "access_count": 0} for id_ in ids]
+        base_metadatas = [
+            {"doc_id": id_, "timestamp": now, "last_access": now, "access_count": 0}
+            for id_ in ids
+        ]
+
+        if metadatas is not None:
+            if len(metadatas) != len(texts):
+                raise ValueError("Length of metadatas must match length of texts.")
+            merged_metadatas = [
+                {**base, **user} for base, user in zip(base_metadatas, metadatas)
+            ]
+        else:
+            merged_metadatas = base_metadatas
+
         try:
-            self.vectorstore.add_texts(texts=texts, metadatas=metadatas, ids=ids)
+            self.vectorstore.add_texts(texts=texts, metadatas=merged_metadatas, ids=ids)
         except HTTPError as e:
             logger.warning(f"Embedding failed ({e.response.status_code}): {e.response.text}")
         self.save()

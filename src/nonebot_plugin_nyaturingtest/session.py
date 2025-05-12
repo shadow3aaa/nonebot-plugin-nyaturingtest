@@ -432,7 +432,8 @@ class Session:
         # 检索聊天记录记忆
         try:
             long_term_memory = [
-                mem.page_content for mem in self.long_term_memory_history.retrieve(" ".join(keywords), k=5)
+                f"{mem.metadata['sender']}: {mem.page_content}"
+                for mem in self.long_term_memory_history.retrieve(" ".join(keywords), k=5)
             ]
             logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
         except Exception as e:
@@ -961,12 +962,28 @@ dominance: {self.global_emotion.dominance}
 
         # 压入消息记忆
         self.global_memory.update(messages_chunk)
-        self.long_term_memory_history.add_texts([f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk])
+        self.long_term_memory_history.add_texts(
+            texts=[msg.content for msg in messages_chunk],
+            metadatas=[
+                {
+                    "sender": msg.user_name,
+                }
+                for msg in messages_chunk
+            ],
+        )
         if reply_messages:
             self.global_memory.update(
                 [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
             )
-            self.long_term_memory_history.add_texts([f"{self.__name}: '{msg}'" for msg in reply_messages])
+            self.long_term_memory_history.add_texts(
+                texts=[msg.content for msg in messages_chunk],
+                metadatas=[
+                    {
+                        "sender": self.__name,
+                    }
+                    for _ in reply_messages
+                ],
+            )
 
         # 保存会话状态
         self.save_session()

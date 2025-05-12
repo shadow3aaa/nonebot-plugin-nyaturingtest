@@ -15,7 +15,9 @@ from nonebot.adapters.onebot.v11 import (
     Bot,
     Event,
     GroupMessageEvent,
+    PrivateMessageEvent,
 )
+from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
@@ -41,6 +43,9 @@ __plugin_meta__ = PluginMetadata(
 
 async def is_group_message(event: Event) -> bool:
     return isinstance(event, GroupMessageEvent)
+
+async def is_private_message(event: Event) -> bool:
+    return isinstance(event, PrivateMessageEvent)
 
 
 @dataclass
@@ -89,33 +94,74 @@ async def spawn_state(state: GroupState):
 group_states: dict[int, GroupState] = {}
 
 help = on_command(rule=is_group_message, permission=SUPERUSER, cmd="help", aliases={"帮助"}, priority=0, block=True)
+help_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="help", aliases={"帮助"}, priority=0, block=True
+)
 get_status = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="status", aliases={"状态"}, priority=0, block=True
+)
+get_status_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="status", aliases={"状态"}, priority=0, block=True
 )
 auto_chat = on_message(rule=is_group_message, priority=1, block=False)
 set_role = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="set_role", aliases={"设置角色"}, priority=0, block=True
 )
+set_role_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="set_role", aliases={"设置角色"}, priority=0, block=True
+)
 get_role = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="role", aliases={"当前角色"}, priority=0, block=True
+)
+get_role_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="role", aliases={"当前角色"}, priority=0, block=True
 )
 calm_down = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="calm", aliases={"冷静"}, priority=0, block=True
 )
+calm_down_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="calm", aliases={"冷静"}, priority=0, block=True
+)
 reset = on_command(rule=is_group_message, permission=SUPERUSER, cmd="reset", aliases={"重置"}, priority=0, block=True)
+reset_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="reset", aliases={"重置"}, priority=0, block=True
+)
 get_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
+get_provider_pm = on_command(rule=is_private_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
 set_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
+set_provider_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True
+)
 get_presets = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="presets", aliases={"preset"}, priority=0, block=True
 )
+get_presets_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="presets", aliases={"preset"}, priority=0, block=True
+)
 set_presets = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="set_preset", aliases={"set_presets"}, priority=0, block=True
+)
+set_presets_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="set_preset", aliases={"set_presets"}, priority=0, block=True
+)
+list_groups_pm = on_command(
+    rule=is_private_message, permission=SUPERUSER, cmd="list_groups", aliases={"群组列表"}, priority=0, block=True
 )
 
 
 @get_presets.handle()
 async def handle_get_presets(event: GroupMessageEvent):
-    group_id = event.group_id
+    await do_get_presets(get_presets, event.group_id)
+
+@get_presets_pm.handle()
+async def handle_get_presets_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await get_presets_pm.finish("请提供<qq群号>")
+    group_id = int(arg)
+    await do_get_presets(get_presets_pm, group_id)
+
+async def do_get_presets(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -138,13 +184,28 @@ async def handle_get_presets(event: GroupMessageEvent):
     msg = "可选的预设:\n"
     for preset in presets:
         msg += f"- {preset}\n"
-    msg += "使用方法: set_presets <预设名称> <预设内容>\n"
-    await get_presets.finish(msg)
-
+    msg += "使用方法: set_presets <预设名称>\n"
+    await matcher.finish(msg)
 
 @set_presets.handle()
 async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandArg()):
+    file = args.extract_plain_text().strip()
+    if file == "":
+        await set_presets.finish("请提供<预设文件名>")
     group_id = event.group_id
+    await do_set_presets(set_presets, group_id, file)
+
+@set_presets_pm.handle()
+async def handle_set_presets_pm(args: Message = CommandArg()):
+    preset_args = args.extract_plain_text().strip().split(" ", 1)
+    if len(preset_args) != 2:
+        await set_presets_pm.finish("请提供<qq群号> <预设文件名>")
+    group_id = int(preset_args[0])
+    file = preset_args[1]
+
+    await do_set_presets(set_presets_pm, group_id, file)
+
+async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -163,18 +224,26 @@ async def handle_set_presets(event: GroupMessageEvent, args: Message = CommandAr
             task.add_done_callback(_tasks.discard)
 
     state = group_states[group_id]
-    if arg := args.extract_plain_text().strip():
-        if state.session.load_preset(arg):
-            await set_presets.finish(f"预设已加载: {arg}")
-        else:
-            await set_presets.finish(f"不存在的预设: {arg}")
+    if state.session.load_preset(filename=file):
+        await matcher.finish(f"预设已加载: {file}")
     else:
-        await set_presets.finish("请提供预设名称")
+        await matcher.finish(f"不存在的预设: {file}")
 
 
 @get_provider.handle()
 async def handle_get_provider(event: GroupMessageEvent):
     group_id = event.group_id
+    await do_get_provider(get_provider, group_id)
+
+@get_provider_pm.handle()
+async def handle_get_provider_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await get_provider_pm.finish("请提供<qq群号>")
+    group_id = int(arg)
+    await do_get_provider(get_provider_pm, group_id)
+
+async def do_get_provider(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -194,12 +263,26 @@ async def handle_get_provider(event: GroupMessageEvent):
 
     state = group_states[group_id]
     provider = state.client.type
-    await get_provider.finish(f"当前提供者: {provider}")
-
+    await matcher.finish(f"当前提供者: {provider}")
 
 @set_provider.handle()
 async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
+    provider = args.extract_plain_text().strip()
+    if provider == "":
+        await set_provider.finish("请提供<提供者>")
+    await do_set_provider(set_provider, group_id, provider)
+
+@set_provider_pm.handle()
+async def handle_set_provider_pm(args: Message = CommandArg()):
+    preset_args = args.extract_plain_text().strip().split(" ")
+    if len(preset_args) != 2:
+        await set_provider_pm.finish("请提供<群号> <提供者>")
+    group_id = int(preset_args[0])
+    provider = preset_args[1]
+    await do_set_provider(set_provider_pm, group_id, provider)
+
+async def do_set_provider(matcher: type[Matcher], group_id: int, provider: str):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -218,7 +301,6 @@ async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandA
             task.add_done_callback(_tasks.discard)
 
     state = group_states[group_id]
-    provider = args.extract_plain_text().strip()
     if provider in ["gemini", "openai"]:
         if provider == "gemini":
             state.client = LLMClient(client=genai.Client(api_key=plugin_config.nyaturingtest_chat_gemini_api_key))
@@ -229,18 +311,14 @@ async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandA
                     base_url=plugin_config.nyaturingtest_chat_openai_base_url,
                 )
             )
-        await set_provider.finish(f"已设置提供者为: {provider}")
+        await matcher.finish(f"已设置提供者为: {provider}")
     else:
-        await set_provider.finish("无效的提供者，请选择 'gemini' 或 'openai'")
+        await matcher.finish("无效的提供者，请选择 'gemini' 或 'openai'")
 
 
 @help.handle()
-async def handle_help(event: GroupMessageEvent):
-    group_id = event.group_id
-    if group_id not in group_states:
-        return
-    else:
-        help_message = """
+async def handle_help():
+    help_message = """
 可用命令:
 1. set_role <角色名> <角色设定> - 设置角色
 2. role - 获取当前角色
@@ -254,12 +332,48 @@ async def handle_help(event: GroupMessageEvent):
 9. help - 显示本帮助信息
 ",
 """
-        await help.finish(help_message)
+    await help.finish(help_message)
 
+@help_pm.handle()
+async def handle_help_pm():
+    help_message = """
+可用命令:
+1. set_role <群号> <角色名> <角色设定> - 设置角色
+2. role <群号> - 获取当前角色
+3. calm <群号> - 冷静
+4. reset <群号> - 重置会话
+5. status <群号> - 获取状态
+6. provider <群号> - 获取当前提供商
+7. set_provider <群号> <提供者> - 设置提供商 (gemini/openai)
+8. set_presets <群号> <预设名称> <预设内容> - 设置预设
+9. presets <群号> - 获取可用预设
+10: list_groups - 获取启用nyabot的群组列表
+11. help - 显示本帮助信息
+",
+"""
+    await help_pm.finish(help_message)
 
 @set_role.handle()
 async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()):
+    role_args = args.extract_plain_text().strip().split(" ")
+    if len(role_args) != 2:
+        await set_role.finish("请提供<角色名> <角色设定>")
     group_id = event.group_id
+    name = role_args[0]
+    role = role_args[1]
+    await do_set_role(set_role, group_id, name, role)
+
+@set_role_pm.handle()
+async def handle_set_role_pm(args: Message = CommandArg()):
+    role_args = args.extract_plain_text().strip().split(" ")
+    if len(role_args) != 3:
+        await set_role_pm.finish("请提供<群号> <角色名> <角色设定>")
+    group_id = int(role_args[0])
+    name = role_args[1]
+    role = role_args[2]
+    await do_set_role(set_role_pm, group_id, name, role)
+
+async def do_set_role(matcher: type[Matcher], group_id: int, name: str, role: str):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -278,20 +392,24 @@ async def handle_set_role(event: GroupMessageEvent, args: Message = CommandArg()
             task.add_done_callback(_tasks.discard)
 
     state = group_states[group_id]
-    if arg := args.extract_plain_text().strip():
-        role_rags = arg.split(" ", 1)
-        if len(role_rags) == 2:
-            state.session.set_role(role_rags[0], role_rags[1])
-            await set_role.finish(f"角色已设为: {role_rags[0]}\n设定: {role_rags[1]}")
-        else:
-            await set_role.finish("请提供角色名和角色设定")
-    else:
-        await set_role.finish("请提供角色描述")
+    state.session.set_role(name=name, role=role)
+    await matcher.finish(f"角色已设为: {name}\n设定: {role}")
 
 
 @get_role.handle()
 async def handle_get_role(event: GroupMessageEvent):
     group_id = event.group_id
+    await do_get_role(get_role, group_id)
+
+@get_role_pm.handle()
+async def handle_get_role_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await get_role_pm.finish("请提供<群号>")
+    group_id = int(arg)
+    await do_get_role(get_role_pm, group_id)
+
+async def do_get_role(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -311,12 +429,23 @@ async def handle_get_role(event: GroupMessageEvent):
 
     state = group_states[group_id]
     role = state.session.role()
-    await get_role.finish(f"当前角色: {role}")
+    await matcher.finish(f"当前角色: {role}")
 
 
 @calm_down.handle()
 async def handle_calm_down(event: GroupMessageEvent):
     group_id = event.group_id
+    await do_calm_down(calm_down, group_id)
+
+@calm_down_pm.handle()
+async def handle_calm_down_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await calm_down_pm.finish("请提供<群号>")
+    group_id = int(arg)
+    await do_calm_down(calm_down_pm, group_id)
+
+async def do_calm_down(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -336,12 +465,23 @@ async def handle_calm_down(event: GroupMessageEvent):
 
     state = group_states[group_id]
     state.session.calm_down()
-    await calm_down.finish("已老实")
+    await matcher.finish("已老实")
 
 
 @reset.handle()
 async def handle_reset(event: GroupMessageEvent):
     group_id = event.group_id
+    await do_reset(reset, group_id)
+
+@reset_pm.handle()
+async def handle_reset_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await reset_pm.finish("请提供<群号>")
+    group_id = int(arg)
+    await do_reset(reset_pm, group_id)
+
+async def do_reset(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -360,12 +500,23 @@ async def handle_reset(event: GroupMessageEvent):
             task.add_done_callback(_tasks.discard)
     state = group_states[group_id]
     state.session.reset()
-    await reset.finish("已重置会话")
+    await matcher.finish("已重置会话")
 
 
 @get_status.handle()
 async def handle_status(event: GroupMessageEvent):
     group_id = event.group_id
+    await do_status(get_status, group_id)
+
+@get_status_pm.handle()
+async def handle_status_pm(args: Message = CommandArg()):
+    arg = args.extract_plain_text().strip()
+    if arg == "":
+        await get_status_pm.finish("请提供<群号>")
+    group_id = int(arg)
+    await do_status(get_status_pm, group_id)
+
+async def do_status(matcher: type[Matcher], group_id: int):
     if group_id not in group_states:
         allowed_groups = plugin_config.nyaturingtest_enabled_groups
         if group_id not in allowed_groups:
@@ -384,7 +535,17 @@ async def handle_status(event: GroupMessageEvent):
             task.add_done_callback(_tasks.discard)
 
     state = group_states[group_id]
-    await get_status.finish(state.session.status())
+    await matcher.finish(state.session.status())
+
+@list_groups_pm.handle()
+async def handle_list_groups_pm():
+    allowed_groups = plugin_config.nyaturingtest_enabled_groups
+    if not allowed_groups:
+        await list_groups_pm.finish("没有启用的群组")
+    msg = "启用的群组:\n"
+    for group_id in allowed_groups:
+        msg += f"- {group_id}\n"
+    await list_groups_pm.finish(msg)
 
 
 def llm_response(client: LLMClient, message: str) -> str:

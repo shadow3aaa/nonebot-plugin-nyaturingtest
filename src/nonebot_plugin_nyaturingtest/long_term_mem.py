@@ -65,27 +65,103 @@ class LongTermMemory:
         """持久化 FAISS 索引和 docstore 到本地文件夹。"""
         self.vectorstore.save_local(folder_path=self.persist_directory, index_name=os.path.basename(self.index_path))
 
-    def add_texts(self, texts: list[str], metadatas: list[dict] | None = None,) -> None:
+    def add_texts(
+        self, texts: list[str], metadatas: list[dict] | None = None, similarity_threshold: float = 0.85
+    ) -> None:
+        """
+        添加文本到长期记忆，带语义去重功能
+
+        Args:
+            texts: 要添加的文本列表
+            metadatas: 元数据列表，可选
+            similarity_threshold: 相似度阈值，超过此值则认为是重复内容，范围[0-1]，默认0.85
+        """
         if not texts:
             return
-        now = self._now_str()
-        ids = [str(uuid.uuid4()) for _ in texts]
-        base_metadatas = [
-            {"doc_id": id_, "timestamp": now, "last_access": now, "access_count": 0}
-            for id_ in ids
-        ]
 
-        if metadatas is not None:
-            if len(metadatas) != len(texts):
-                raise ValueError("Length of metadatas must match length of texts.")
-            merged_metadatas = [
-                {**base, **user} for base, user in zip(base_metadatas, metadatas)
-            ]
+        # 准备要添加的文本和元数据
+        filtered_texts = []
+        filtered_metadatas = []
+
+        now = self._now_str()
+
+        # 为每个文本检查重复并过滤
+        for i, text in enumerate(texts):
+            # 跳过空文本
+            if not text.strip():
+                continue
+
+            # 检查是否存在相似文本
+            is_duplicate = False
+
+            try:
+                # 搜索相似文本
+                similar_docs = self.vectorstore.similarity_search_with_score(text, k=1)
+
+                # 如果找到结果且相似度高于阈值，则认为是重复
+                if similar_docs and similar_docs[0][1] <= (1.0 - similarity_threshold):
+                    is_duplicate = True
+                    # 如果有元数据，检查是否需要合并
+                    if metadatas is not None and i < len(metadatas):
+                        doc_id = similar_docs[0][0].metadata.get("doc_id")
+                        if doc_id:
+                            # 获取已存在文档的元数据
+                            existing_doc = similar_docs[0][0]
+                            existing_meta = existing_doc.metadata
+                            current_meta = metadatas[i]
+
+                            # 合并元数据，相同条目用' | '隔开
+                            merged_meta = existing_meta.copy()
+
+                            for key, value in current_meta.items():
+                                if key in merged_meta and key not in [
+                                    "doc_id",
+                                    "timestamp",
+                                    "last_access",
+                                    "access_count",
+                                ]:
+                                    if str(value) != str(merged_meta[key]):
+                                        merged_meta[key] = f"{merged_meta[key]} | {value}"
+                                elif key not in ["doc_id", "timestamp", "last_access", "access_count"]:
+                                    merged_meta[key] = value
+
+                            # 更新文档元数据
+                            self.vectorstore.delete(ids=[doc_id])
+                            self.vectorstore.add_texts(
+                                texts=[existing_doc.page_content], metadatas=[merged_meta], ids=[doc_id]
+                            )
+                            logger.debug(f"合并重复文本元数据: '{text[:30]}...' 相似度: {1.0 - similar_docs[0][1]:.2f}")
+                        else:
+                            logger.debug(f"跳过添加重复文本: '{text[:30]}...' 相似度: {1.0 - similar_docs[0][1]:.2f}")
+                    else:
+                        logger.debug(f"跳过添加重复文本: '{text[:30]}...' 相似度: {1.0 - similar_docs[0][1]:.2f}")
+            except Exception as e:
+                logger.debug(f"检查相似文本失败: {e}")
+
+            if not is_duplicate:
+                filtered_texts.append(text)
+                # 如果有元数据，则保留对应的元数据
+                if metadatas is not None and i < len(metadatas):
+                    filtered_metadatas.append(metadatas[i])
+
+        # 如果所有文本都被过滤掉了，直接返回
+        if not filtered_texts:
+            return
+
+        # 生成UUID和基础元数据
+        ids = [str(uuid.uuid4()) for _ in filtered_texts]
+        base_metadatas = [{"doc_id": id_, "timestamp": now, "last_access": now, "access_count": 0} for id_ in ids]
+
+        if metadatas is not None and filtered_metadatas:
+            if len(filtered_metadatas) != len(filtered_texts):
+                raise ValueError("Length of filtered_metadatas must match length of filtered_texts.")
+            merged_metadatas = [{**base, **user} for base, user in zip(base_metadatas, filtered_metadatas)]
         else:
             merged_metadatas = base_metadatas
 
         try:
-            self.vectorstore.add_texts(texts=texts, metadatas=merged_metadatas, ids=ids)
+            self.vectorstore.add_texts(texts=filtered_texts, metadatas=merged_metadatas, ids=ids)
+            logger.debug(f"添加了 {len(filtered_texts)} 条非重复文本到长期记忆")
         except HTTPError as e:
             logger.warning(f"Embedding failed ({e.response.status_code}): {e.response.text}")
         self.save()

@@ -461,7 +461,7 @@ async def message2BotMessage(group_id: int, message: Message, bot: Bot) -> str:
                 cache_path = IMAGE_CACHE_DIR.joinpath("raw")
                 cache_path.mkdir(parents=True, exist_ok=True)
 
-                key = re.search(r"[?&]rkey=([a-zA-Z0-9_-]+)", url)
+                key = re.search(r"[?&]fileid=([a-zA-Z0-9_-]+)", url)
                 if key:
                     key = key.group(1)
                     logger.debug(f"Image cache key: {key}")

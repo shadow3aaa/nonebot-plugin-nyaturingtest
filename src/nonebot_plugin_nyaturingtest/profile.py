@@ -43,8 +43,11 @@ class PersonProfile:
         if len(old_interactions) > 0:
             # 总印象
             valence = 0.0
+            valence_negative = 0.0
             arousal = 0.0
+            arousal_negative = 0.0
             dominance = 0.0
+            dominance_negative = 0.0
 
             now = datetime.now()
             merged_impression_time: datetime | None = None
@@ -72,16 +75,30 @@ class PersonProfile:
                 decayed_dominance = decay_dominance(elapsed_hours, impression.delta.get("dominance", 0.0))
 
                 # 计算出的情感也是情感
-                valence += decayed_valence
-                arousal += decayed_arousal
-                dominance += decayed_dominance
+                if decayed_valence > 0:
+                    valence = max(valence, decayed_valence)
+                else:
+                    valence_negative = min(valence_negative, decayed_valence)
+                if decayed_arousal > 0:
+                    arousal = max(arousal, decayed_arousal)
+                else:
+                    arousal_negative = min(arousal_negative, decayed_arousal)
+                if decayed_dominance > 0:
+                    dominance = max(dominance, decayed_dominance)
+                else:
+                    dominance_negative = min(dominance_negative, decayed_dominance)
 
             # 合并为一个印象
             if merged_impression_time is None:
                 return
 
             merged_impression = Impression(
-                delta={"valence": valence, "arousal": arousal, "dominance": dominance}, timestamp=merged_impression_time
+                delta={
+                    "valence": valence + valence_negative,
+                    "arousal": arousal + arousal_negative,
+                    "dominance": dominance + dominance_negative,
+                },
+                timestamp=merged_impression_time,
             )
 
             # 清除过期的印象

@@ -33,7 +33,7 @@ class HippoMemory:
                 llm_api_key=llm_api_key,
                 embedding_model_name=embedding_model,
                 embedding_api_key=embedding_api_key,
-                embedding_base_url="https://api.siliconflow.cn/v1/embeddings",
+                embedding_base_url="https://api.siliconflow.cn/v1",
                 save_dir=persist_directory,
             )
             logger.info(f"已创建新的HippoRAG集合: {collection_name}")

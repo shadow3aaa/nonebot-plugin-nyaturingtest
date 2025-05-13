@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import shutil
 
 from nonebot import logger
 
@@ -52,15 +53,10 @@ class HippoMemory:
         """
         # 删除索引文件
         if os.path.exists(self.persist_directory):
-            for file in os.listdir(self.persist_directory):
-                file_path = os.path.join(self.persist_directory, file)
-                try:
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
-                    elif os.path.isdir(file_path):
-                        os.rmdir(file_path)
-                except Exception as e:
-                    logger.error(f"Failed to delete {file_path}: {e}")
+            try:
+                shutil.rmtree(self.persist_directory)
+            except Exception as e:
+                logger.error(f"Failed to delete persist directory: {e}")
         else:
             logger.warning(f"Persist directory {self.persist_directory} does not exist.")
         # 重新创建索引

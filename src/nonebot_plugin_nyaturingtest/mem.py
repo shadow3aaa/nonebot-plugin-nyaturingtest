@@ -22,6 +22,27 @@ class Message:
     消息内容
     """
 
+    def to_json(self) -> dict:
+        """
+        转换为 JSON 格式
+        """
+        return {
+            "time": self.time.isoformat(),
+            "user_name": self.user_name,
+            "content": self.content,
+        }
+
+    @staticmethod
+    def from_json(data: dict) -> "Message":
+        """
+        从 JSON 格式转换为 Message 对象
+        """
+        return Message(
+            time=datetime.fromisoformat(data["time"]),
+            user_name=data["user_name"],
+            content=data["content"],
+        )
+
 
 @dataclass
 class MemoryRecord:

@@ -172,7 +172,7 @@ class Session:
                 "role": self.__role,
                 "global_memory": {
                     "compressed_history": self.global_memory.access().compressed_history,
-                    "messages": self.global_memory.access().messages,
+                    "messages": [msg.to_json() for msg in self.global_memory.access().messages],
                 },
                 "global_emotion": {
                     "valence": self.global_emotion.valence,
@@ -235,7 +235,7 @@ class Session:
                 try:
                     self.global_memory = Memory(
                         compressed_message=session_data["global_memory"].get("compressed_history", ""),
-                        messages=session_data["global_memory"].get("messages", []),
+                        messages=[Message.from_json(msg) for msg in session_data["global_memory"].get("messages", [])],
                         llm_client=LLMClient(
                             client=OpenAI(
                                 api_key=plugin_config.nyaturingtest_siliconflow_api_key,

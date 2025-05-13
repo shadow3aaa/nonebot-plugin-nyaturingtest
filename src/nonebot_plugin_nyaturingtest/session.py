@@ -7,6 +7,7 @@ import os
 import pickle
 import random
 import re
+import traceback
 
 from nonebot import logger
 
@@ -395,6 +396,7 @@ class Session:
             logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
         except Exception as e:
             logger.error(f"回忆聊天记录失败: {e}")
+            traceback.print_exc()
             long_term_memory = []
 
         logger.debug("检索阶段结束")

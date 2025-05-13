@@ -10,9 +10,10 @@ import re
 
 from nonebot import logger
 
+from .config import plugin_config
 from .emotion import EmotionState
+from .hippo_mem import HippoMemory
 from .impression import Impression
-from .long_term_mem import LongTermMemory
 from .mem import Memory, Message
 from .presets import PRESETS
 from .profile import PersonProfile
@@ -33,25 +34,9 @@ class _SearchResult:
     检索阶段的结果
     """
 
-    chat_history: list[str]
+    mem_history: list[str]
     """
-    聊天历史记录
-    """
-    knowledge: list[str]
-    """
-    知识
-    """
-    event: list[str]
-    """
-    事件
-    """
-    relationships: list[str]
-    """
-    人物关系
-    """
-    bot_self: list[str]
-    """
-    自我认知
+    记忆记录
     """
 
 
@@ -85,39 +70,15 @@ class Session:
         """
         全局短时记忆
         """
-        self.long_term_memory_history: LongTermMemory = LongTermMemory(
-            embedding_api_key=siliconflow_api_key, index_filename=f"faiss_history_index_{id}"
-        )
-        """
-        对聊天记录的长期记忆
-        """
-        self.long_term_memory_knowledge: LongTermMemory = LongTermMemory(
+        self.long_term_memory: HippoMemory = HippoMemory(
+            llm_model=plugin_config.nyaturingtest_chat_openai_model,
+            llm_api_key=plugin_config.nyaturingtest_chat_openai_api_key,
+            llm_base_url=plugin_config.nyaturingtest_chat_openai_base_url,
             embedding_api_key=siliconflow_api_key,
-            index_filename=f"faiss_knowledge_index_{id}",
+            embedding_model="BAAI/bge-large-zh-v1.5",
         )
         """
-        对事实性资料的长期记忆
-        """
-        self.long_term_memory_relationships: LongTermMemory = LongTermMemory(
-            embedding_api_key=siliconflow_api_key,
-            index_filename=f"faiss_relationships_index_{id}",
-        )
-        """
-        对人物关系的的长期记忆
-        """
-        self.long_term_memory_events: LongTermMemory = LongTermMemory(
-            embedding_api_key=siliconflow_api_key,
-            index_filename=f"faiss_events_index_{id}",
-        )
-        """
-        对事件的场景记忆
-        """
-        self.long_term_memory_self: LongTermMemory = LongTermMemory(
-            embedding_api_key=siliconflow_api_key,
-            index_filename=f"faiss_self_index_{id}",
-        )
-        """
-        对自我状态的的长期记忆
+        对聊天记录的长期记忆 (基于HippoRAG)
         """
         self.__name = name
         """
@@ -172,11 +133,6 @@ class Session:
         self.__name = "terminus"
         self.__role = "一个男性人类"
         self.global_memory = Memory()
-        self.long_term_memory_history.clear()
-        self.long_term_memory_knowledge.clear()
-        self.long_term_memory_relationships.clear()
-        self.long_term_memory_events.clear()
-        self.long_term_memory_self.clear()
         self.profiles = {}
         self.global_emotion = EmotionState()
         self.last_response = []
@@ -275,7 +231,7 @@ class Session:
                 except Exception as e:
                     logger.error(f"[Session {self.id}] 恢复全局短时记忆失败: {e}")
                     self.global_memory = Memory()
-            
+
             # 恢复聊天总结
             self.chat_summary = session_data.get("chat_summary", "")
 
@@ -334,10 +290,10 @@ class Session:
         preset = PRESETS[filename]
         self.reset()
         self.set_role(preset.name, preset.role)
-        self.long_term_memory_knowledge.add_texts(preset.knowledges)
-        self.long_term_memory_relationships.add_texts(preset.relationships)
-        self.long_term_memory_events.add_texts(preset.events)
-        self.long_term_memory_self.add_texts(preset.bot_self)
+        self.long_term_memory.add_texts(preset.knowledges)
+        self.long_term_memory.add_texts(preset.relationships)
+        self.long_term_memory.add_texts(preset.events)
+        self.long_term_memory.add_texts(preset.bot_self)
         logger.info(f"加载预设：{filename} 成功")
         return True
 
@@ -433,63 +389,18 @@ class Session:
         """
         logger.debug("检索阶段开始")
         keywords = genralize_stage_result.keywords
-        # 检索聊天记录记忆
+        # 检索记忆
         try:
-            long_term_memory = [
-                f"{mem.metadata['sender']}: {mem.page_content}"
-                for mem in self.long_term_memory_history.retrieve(" ".join(keywords), k=5)
-            ]
+            long_term_memory = self.long_term_memory.retrieve(keywords, k=5)
             logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
         except Exception as e:
             logger.error(f"回忆聊天记录失败: {e}")
             long_term_memory = []
 
-        # 检索知识库
-        try:
-            long_term_knowledge = [
-                mem.page_content for mem in self.long_term_memory_knowledge.retrieve(" ".join(keywords), k=8)
-            ]
-            logger.debug(f"搜索到的相关知识记忆：{long_term_knowledge}")
-        except Exception as e:
-            logger.error(f"回忆知识库失败: {e}")
-            long_term_knowledge = []
-
-        # 检索人物关系
-        try:
-            long_term_relationships = [
-                mem.page_content for mem in self.long_term_memory_relationships.retrieve(" ".join(keywords), k=3)
-            ]
-            logger.debug(f"搜索到的相关人物关系记忆：{long_term_relationships}")
-        except Exception as e:
-            logger.error(f"回忆人物关系失败: {e}")
-            long_term_relationships = []
-
-        # 检索事件
-        try:
-            long_term_events = [
-                mem.page_content for mem in self.long_term_memory_events.retrieve(" ".join(keywords), k=5)
-            ]
-            logger.debug(f"搜索到的事件: {long_term_events}")
-        except Exception as e:
-            logger.error(f"回忆相关事件失败：{e}")
-            long_term_events = []
-
-        # 检索自我认知
-        try:
-            long_term_self = [mem.page_content for mem in self.long_term_memory_self.retrieve(" ".join(keywords), k=5)]
-            logger.debug(f"搜索到的相关自我认知记忆：{long_term_self}")
-        except Exception as e:
-            logger.error(f"回忆自我认知失败: {e}")
-            long_term_self = []
-
         logger.debug("检索阶段结束")
 
         return _SearchResult(
-            chat_history=long_term_memory,
-            knowledge=long_term_knowledge,
-            event=long_term_events,
-            relationships=long_term_relationships,
-            bot_self=long_term_self,
+            mem_history=long_term_memory,
         )
 
     def __feedback_stage(
@@ -523,12 +434,12 @@ class Session:
 ---
 
 ## 1. 任务目标
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，还有检索到的相关信息，评估你当前的情绪
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，还有检索到的相关记忆，评估你当前的情绪
   - 情绪采用 VAD 模型，三个维度取值范围：
     - valence (愉悦度)：[-1.0, 1.0]
     - arousal (唤醒度)：[0.0, 1.0]
     - dominance (支配度)：[-1.0, 1.0]
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关信息，评估你对“新
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关记忆，评估你对“新
   输入消息”的回复意愿，范围为[0.0, 1.0]，并且指出“新输入消息”中你想回复的内容的那些下标（无论你给出的回复意愿是多少，都
   要返回至少一个你想回复的内容的下标，如果你需要回复多个消息或者你想要回复的内容不是连续的（如一个问题被拆为3个消息），那
   么你需要按顺序返回它们全部的下标）
@@ -538,11 +449,11 @@ class Session:
     - 情绪低落：懒得搭理，偶尔跟风几句，但是不会因此随意攻击他人
     - 情绪稳定：中立理性，温和，倾向于有逻辑的互动
     - 极端情绪下可能会主动控制话题引导情绪恢复，也可能选择不回应冷静下来
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关信息，评估你对“新
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关记忆，评估你对“新
   输入消息”中**每条**消息的情感倾向
   - 如果消息和你完全无关，或你不感兴趣，那么给出的每个情感维度的值总是 0.0
   - 输出按照“新输入消息”的顺序
-- 基于“历史聊天”的背景，“你在上次对话做出的总结”，还有检索到的相关信息，用简短的语言总结聊天内容，总结注重于和上次对话的
+- 基于“历史聊天”的背景，“你在上次对话做出的总结”，还有检索到的相关记忆，用简短的语言总结聊天内容，总结注重于和上次对话的
   连续性，包括相关人物，简要内容。
   - 特别的，如果“历史聊天”，检索到的信息中不包含“你在上次对话做出的总结”的人物，那么在这次总结就不保留
   - 注意：要满足连续性需求，不能简单的只总结“新输入消息”的内容，还要结合上次总结和“历史聊天”的内容，并且不能因为这次的消
@@ -605,10 +516,11 @@ class Session:
     小明，小红：讨论 AI 的道德问题，继续深入探讨如何定义道德标准。
     小亮，小圆：讨论玩猜谜游戏。
 
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合检索到的相关信息进行分析，整理信息保存，要整理的信息和要求如下
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合检索到的相关记忆进行分析，整理信息保存，要整理的信息和要求如下
   ## 要求：
-  - 不能重复，即不能和下面提供的检索到的相关信息已有内容重复
+  - 不能重复，即不能和下面提供的检索到的相关记忆已有内容重复
   ## 要整理的信息：
+  - 无论信息是什么类别，都放到`analyze_result`字段
   - 事件类：
     - 如果包含事件类信息，则保存为事件信息，内容是对事件进行简要叙述
   - 资料类：
@@ -642,27 +554,11 @@ dominance: {self.global_emotion.dominance}
 {related_profiles_json}
 ```
 
-5. 检索到的相关聊天记录
+5. 检索到的相关记忆
 
-{search_stage_result.chat_history}
+{search_stage_result.mem_history}
 
-6. 检索到的相关事件
-
-{search_stage_result.event}
-
-7. 检索到的相关知识
-
-{search_stage_result.knowledge}
-
-8. 检索到的相关人物关系
-
-{search_stage_result.relationships}
-
-9. 检索到的对自我({self.__name})的认知
-
-{search_stage_result.bot_self}
-
-10. 你在上次对话做出的总结
+6. 你在上次对话做出的总结
 
 {self.chat_summary}
 
@@ -699,11 +595,7 @@ dominance: {self.global_emotion.dominance}
     "dominance": -1.0≤float≤1.0
   }},
   "summary": "对聊天内容的总结",
-  "analyze_result": {{
-    "event": ["事件1", "事件2"],
-    "knowledge": ["知识1", "知识2"],
-    "relationships": ["人物关系1", "人物关系2"],
-  }}
+  "analyze_result": ["事件类信息", "资料类信息", "人物关系类信息", "自我认知类信息"]
 }}
 ```
 """
@@ -756,21 +648,12 @@ dominance: {self.global_emotion.dominance}
             logger.debug(f"反馈阶段更新聊天总结：{self.chat_summary}")
 
             # 更新长期记忆
-            if "event" not in response_dict["analyze_result"]:
-                raise ValueError("Feedback validation error: missing 'event' field in analyze_result: " + response)
-            if "knowledge" not in response_dict["analyze_result"]:
-                raise ValueError("Feedback validation error: missing 'knowledge' field in analyze_result: " + response)
-            if "relationships" not in response_dict["analyze_result"]:
-                raise ValueError(
-                    "Feedback validation error: missing 'relationships' field in analyze_result: " + response
-                )
-
-            self.long_term_memory_events.add_texts(response_dict["analyze_result"]["event"])
-            logger.debug(f"反馈阶段更新事件：{self.long_term_memory_events}")
-            self.long_term_memory_knowledge.add_texts(response_dict["analyze_result"]["knowledge"])
-            logger.debug(f"反馈阶段更新知识：{self.long_term_memory_knowledge}")
-            self.long_term_memory_relationships.add_texts(response_dict["analyze_result"]["relationships"])
-            logger.debug(f"反馈阶段更新人物关系：{self.long_term_memory_relationships}")
+            if "analyze_result" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
+            if not isinstance(response_dict["analyze_result"], list):
+                raise ValueError("Feedback validation error: 'analyze_result' is not a list: " + str(response_dict))
+            self.long_term_memory.add_texts(response_dict["analyze_result"])
+            logger.debug(f"反馈阶段更新长期记忆：{response_dict['analyze_result']}")
 
             # 回复意愿
             if "value" not in response_dict["reply_desire"]:
@@ -837,15 +720,15 @@ dominance: {self.global_emotion.dominance}
 
 ## 1. 任务目标
 
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合“你目前的情绪”和“你对相关人物的情绪倾向”，还有检索到的相关信息，你的人设
+- 基于“新输入消息”的内容和“历史聊天”的背景，结合“你目前的情绪”和“你对相关人物的情绪倾向”，还有检索到的相关记忆，你的人设
   (身份认知)，对“你要回复的消息”进行回复
   - “你要回复的消息”全部出自“新输入消息”
 
 ## 2. 你必须遵守的限制：
 
-- 对“新输入消息”的内容和“历史聊天”，“对话内容总结”，还有检索到的相关信息未提到的内容，你必须假装你对此一无所知
+- 对“新输入消息”的内容和“历史聊天”，“对话内容总结”，还有检索到的相关记忆未提到的内容，你必须假装你对此一无所知
   - 例如未提到“iPhone”，你就不能说出它是苹果公司生产的
-- 不得使用你自己的预训练知识，只能依赖“新输入消息”的内容和“历史聊天”，还有检索到的相关信息
+- 不得使用你自己的预训练知识，只能依赖“新输入消息”的内容和“历史聊天”，还有检索到的相关记忆
 - 语言风格限制：
   - 不使用旁白（如“(瞥了一眼)”等）。
   - 不堆砌无意义回复，尤其是对比你在“历史聊天”的回复只有少量变化的回复。
@@ -887,27 +770,11 @@ dominance: {self.global_emotion.dominance}
 {related_profiles_json}
 ```
 
-6. 检索到的相关聊天记录
+6. 检索到的相关记忆
 
-{search_stage_result.chat_history}
+{search_stage_result.mem_history}
 
-7. 检索到的相关事件
-
-{search_stage_result.event}
-
-8. 检索到的相关知识
-
-{search_stage_result.knowledge}
-
-9. 检索到的相关人物关系
-
-{search_stage_result.relationships}
-
-10. 检索到的对自我({self.__name})的认知
-
-{search_stage_result.bot_self}
-
-11. 对话内容总结
+7. 对话内容总结
 
 {self.chat_summary}
 
@@ -966,27 +833,15 @@ dominance: {self.global_emotion.dominance}
 
         # 压入消息记忆
         self.global_memory.update(messages_chunk)
-        self.long_term_memory_history.add_texts(
+        self.long_term_memory.add_texts(
             texts=[msg.content for msg in messages_chunk],
-            metadatas=[
-                {
-                    "sender": msg.user_name,
-                }
-                for msg in messages_chunk
-            ],
         )
         if reply_messages:
             self.global_memory.update(
                 [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
             )
-            self.long_term_memory_history.add_texts(
+            self.long_term_memory.add_texts(
                 texts=reply_messages,
-                metadatas=[
-                    {
-                        "sender": self.__name,
-                    }
-                    for _ in reply_messages
-                ],
             )
 
         # 保存会话状态

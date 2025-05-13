@@ -1,0 +1,3 @@
+[submodule "HippoRAG"]
+	path = HippoRAG
+	url = https://github.com/shadow3aaa/HippoRAG

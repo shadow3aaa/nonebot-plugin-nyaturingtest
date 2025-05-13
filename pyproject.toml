@@ -16,11 +16,12 @@ dependencies = [
   "requests>=2.32.3",
   "faiss-cpu>=1.11.0",
   "langchain-community>=0.3.23",
-  "openai>=1.78.0",
+  "openai==1.58.1",
   "google-genai>=1.14.0",
   "asyncio>=3.4.3",
   "uuid>=1.30",
   "pillow>=11.2.1",
+  "hipporag",
 ]
 
 [dependency-groups]
@@ -115,3 +116,6 @@ executionEnvironments = [
 typeCheckingMode = "standard"
 reportShadowedImports = false
 disableBytesTypePromotions = true
+
+[tool.uv.sources]
+hipporag = { path = "HippoRAG" }

@@ -68,6 +68,7 @@ class Session:
             llm_base_url=plugin_config.nyaturingtest_chat_openai_base_url,
             embedding_api_key=siliconflow_api_key,
             embedding_model="BAAI/bge-large-zh-v1.5",
+            persist_directory=f"./hippo_index_{id}",
         )
         """
         对聊天记录的长期记忆 (基于HippoRAG)

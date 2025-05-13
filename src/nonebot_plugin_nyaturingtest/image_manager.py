@@ -79,7 +79,7 @@ class ImageManager:
     def __init__(self):
         if not self._initialized:
             self._vlm = SiliconFlowVLM(
-                api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key,
+                api_key=plugin_config.nyaturingtest_siliconflow_api_key,
                 model="Pro/Qwen/Qwen2.5-VL-7B-Instruct",
             )
             IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)

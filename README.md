@@ -159,14 +159,13 @@
 
 在 nonebot2 项目的`.env`文件中添加下表中的配置
 
-|                   配置项                    |             必填             |                    默认值                    |                   说明                   |
-| :-----------------------------------------: | :--------------------------: | :------------------------------------------: | :--------------------------------------: |
-|      nyaturingtest_chat_openai_api_key      |              是              |                      无                      |        openai api 接口的 api key         |
-|       nyaturingtest_chat_openai_model       |              否              |               "gpt-3.5-turbo"                |      openai api 接口请求的 模型名称      |
-|     nyaturingtest_chat_openai_base_url      |              否              | "https://api.openai.com/v1/chat/completions" |          openai 接口请求的 url           |
-|      nyaturingtest_chat_gemini_api_key      |              否              |                      无                      |        gemini api 接口的 api key         |
-| nyaturingtest_embedding_siliconflow_api_key |              是              |                      无                      | siliconflow(硅基流动) api 接口的 api key |
-|        nyaturingtest_enabled_groups         | 否(但是不填写此插件就无意义) |                `[]`\(空列表\)                |          仅在这些群组中启用插件          |
+|               配置项               |             必填             |                    默认值                    |                   说明                   |
+| :--------------------------------: | :--------------------------: | :------------------------------------------: | :--------------------------------------: |
+| nyaturingtest_chat_openai_api_key  |              是              |                      无                      |        openai api 接口的 api key         |
+|  nyaturingtest_chat_openai_model   |              否              |               "gpt-3.5-turbo"                |      openai api 接口请求的 模型名称      |
+| nyaturingtest_chat_openai_base_url |              否              | "https://api.openai.com/v1/chat/completions" |          openai 接口请求的 url           |
+| nyaturingtest_siliconflow_api_key  |              是              |                      无                      | siliconflow(硅基流动) api 接口的 api key |
+|    nyaturingtest_enabled_groups    | 否(但是不填写此插件就无意义) |                `[]`\(空列表\)                |          仅在这些群组中启用插件          |
 
 ## 🎉 使用
 
@@ -179,8 +178,6 @@
 |             calm             | SUPERUSER | 群聊 |     冷静(强制归零情绪)     |
 |            reset             | SUPERUSER | 群聊 |          重置会话          |
 |            status            | SUPERUSER | 群聊 |          获取状态          |
-|           provider           | SUPERUSER | 群聊 |       获取当前提供商       |
-|    set_provider <提供者>     | SUPERUSER | 群聊 | 设置提供商 (gemini/openai) |
 |    set_preset <预设名称>     | SUPERUSER | 群聊 |          设置预设          |
 |           presets            | SUPERUSER | 群聊 |        获取可用预设        |
 |             help             | SUPERUSER | 群聊 |        显示帮助信息        |
@@ -194,8 +191,6 @@
 |             calm <群号>             | SUPERUSER | 私聊 |     冷静(强制归零情绪)     |
 |            reset <群号>             | SUPERUSER | 私聊 |          重置会话          |
 |            status <群号>            | SUPERUSER | 私聊 |          获取状态          |
-|           provider <群号>           | SUPERUSER | 私聊 |       获取当前提供商       |
-|    set_provider <群号> <提供者>     | SUPERUSER | 私聊 | 设置提供商 (gemini/openai) |
 |    set_preset <群号> <预设名称>     | SUPERUSER | 私聊 |          设置预设          |
 |           presets <群号>            | SUPERUSER | 私聊 |        获取可用预设        |
 |             list_groups             | SUPERUSER | 私聊 | 获取启用 nyabot 的群组列表 |

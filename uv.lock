@@ -767,24 +767,6 @@ wheels = [
 ]
 
 [[package]]
-name = "google-genai"
-version = "1.14.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "google-auth" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "requests" },
-    { name = "typing-extensions" },
-    { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/00/ba/c8e4c0b60c6dda40e51e2125709d097c2609fce1389b4a05f40cdd51c1ec/google_genai-1.14.0.tar.gz", hash = "sha256:7c608de5bb173486a546f5ec4562255c26bae72d33d758a3207bb26f695d0087", size = 169938 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/86/dde4cd028c8b0716b3f1f6d202647396a87a4ecbbdc7e4beb59b9d9284d3/google_genai-1.14.0-py3-none-any.whl", hash = "sha256:5916ee985bf69ac7b68c4488949225db71e21579afc7ba5ecd5321173b60d3b2", size = 168862 },
-]
-
-[[package]]
 name = "googleapis-common-protos"
 version = "1.70.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1691,7 +1673,6 @@ source = { virtual = "." }
 dependencies = [
     { name = "asyncio" },
     { name = "faiss-cpu" },
-    { name = "google-genai" },
     { name = "hipporag" },
     { name = "httpx" },
     { name = "langchain" },
@@ -1723,7 +1704,6 @@ test = [
 requires-dist = [
     { name = "asyncio", specifier = ">=3.4.3" },
     { name = "faiss-cpu", specifier = ">=1.11.0" },
-    { name = "google-genai", specifier = ">=1.14.0" },
     { name = "hipporag", directory = "HippoRAG" },
     { name = "httpx", specifier = ">=0.27.0,<1.0.0" },
     { name = "langchain", specifier = ">=0.3.25" },

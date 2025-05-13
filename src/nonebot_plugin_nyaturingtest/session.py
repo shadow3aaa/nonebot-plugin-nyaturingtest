@@ -10,7 +10,9 @@ import re
 import traceback
 
 from nonebot import logger
+from openai import OpenAI
 
+from .client import LLMClient
 from .config import plugin_config
 from .emotion import EmotionState
 from .hippo_mem import HippoMemory
@@ -58,7 +60,14 @@ class Session:
         """
         会话ID，用于持久化时的标识
         """
-        self.global_memory: Memory = Memory()
+        self.global_memory: Memory = Memory(
+            llm_client=LLMClient(
+                client=OpenAI(
+                    api_key=plugin_config.nyaturingtest_siliconflow_api_key,
+                    base_url="https://api.siliconflow.cn/v1",
+                )
+            )
+        )
         """
         全局短时记忆
         """
@@ -125,7 +134,7 @@ class Session:
         """
         self.__name = "terminus"
         self.__role = "一个男性人类"
-        self.global_memory = Memory()
+        self.global_memory.clear()
         self.long_term_memory.clear()
         self.profiles = {}
         self.global_emotion = EmotionState()
@@ -161,7 +170,10 @@ class Session:
                 "id": self.id,
                 "name": self.__name,
                 "role": self.__role,
-                "global_memory": pickle.dumps(self.global_memory).hex(),
+                "global_memory": {
+                    "compressed_history": self.global_memory.access().compressed_history,
+                    "messages": self.global_memory.access().messages,
+                },
                 "global_emotion": {
                     "valence": self.global_emotion.valence,
                     "arousal": self.global_emotion.arousal,
@@ -221,10 +233,26 @@ class Session:
             # 恢复全局短时记忆
             if "global_memory" in session_data:
                 try:
-                    self.global_memory = pickle.loads(bytes.fromhex(session_data["global_memory"]))
+                    self.global_memory = Memory(
+                        compressed_message=session_data["global_memory"].get("compressed_history", ""),
+                        messages=session_data["global_memory"].get("messages", []),
+                        llm_client=LLMClient(
+                            client=OpenAI(
+                                api_key=plugin_config.nyaturingtest_siliconflow_api_key,
+                                base_url="https://api.siliconflow.cn/v1",
+                            )
+                        ),
+                    )
                 except Exception as e:
                     logger.error(f"[Session {self.id}] 恢复全局短时记忆失败: {e}")
-                    self.global_memory = Memory()
+                    self.global_memory = Memory(
+                        llm_client=LLMClient(
+                            client=OpenAI(
+                                api_key=plugin_config.nyaturingtest_siliconflow_api_key,
+                                base_url="https://api.siliconflow.cn/v1",
+                            )
+                        )
+                    )
 
             # 恢复聊天总结
             self.chat_summary = str(session_data.get("chat_summary", ""))
@@ -322,17 +350,18 @@ class Session:
         检索阶段
         """
         logger.debug("检索阶段开始")
-        # 搜索 全部新消息 + 短期聊天记录 + 总结
+        # 搜索 全部新消息 + 短期聊天记录 + 历史总结 + 环境总结
         retrieve_messages = (
-            [msg.content for msg in self.global_memory.access()]
+            [f"'{msg.user_name}':'{msg.content}'" for msg in self.global_memory.access().messages]
+            + [self.global_memory.access().compressed_history]
             + [msg.content for msg in messages_chunk]
             + [self.chat_summary]
         )
         try:
             long_term_memory = self.long_term_memory.retrieve(retrieve_messages, k=2)
-            logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
+            logger.debug(f"搜索到的相关记忆：{long_term_memory}")
         except Exception as e:
-            logger.error(f"回忆聊天记录失败: {e}")
+            logger.error(f"回忆失败: {e}")
             traceback.print_exc()
             long_term_memory = []
 
@@ -349,7 +378,7 @@ class Session:
         反馈总结阶段
         """
         logger.debug("反馈阶段开始")
-        reaction_users = {msg.user_name for msg in messages_chunk + self.global_memory.access()}
+        reaction_users = self.global_memory.related_users()
         related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
         related_profiles_json = json.dumps(
             [
@@ -475,7 +504,13 @@ class Session:
 
 1. 历史聊天
 
-{[f"{msg.user_name}: '{msg.content}'" for msg in self.global_memory.access()]}
+- 过去历史聊天总结：
+
+{self.global_memory.access().compressed_history}
+
+- 最近的聊天记录：
+
+{self.global_memory.access().messages}
 
 2. 新输入消息
 
@@ -634,7 +669,7 @@ dominance: {self.global_emotion.dominance}
         对话阶段
         """
         logger.debug("对话阶段开始")
-        reaction_users = {msg.user_name for msg in messages_chunk + self.global_memory.access()}
+        reaction_users = self.global_memory.related_users()
         related_profiles = [profile for profile in self.profiles.values() if profile.user_id in reaction_users]
         related_profiles_json = json.dumps(
             [
@@ -682,7 +717,13 @@ dominance: {self.global_emotion.dominance}
 
 1. 历史聊天
 
-{[f"{msg.user_name}: '{msg.content}'" for msg in self.global_memory.access()]}
+- 过去历史聊天总结：
+
+{self.global_memory.access().compressed_history}
+
+- 最近的聊天记录：
+
+{self.global_memory.access().messages}
 
 2. 新输入消息
 

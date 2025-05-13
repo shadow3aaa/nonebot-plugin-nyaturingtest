@@ -7,7 +7,6 @@ import re
 import ssl
 
 import anyio
-from google import genai
 import httpx
 from nonebot import logger, on_command, on_message
 from nonebot.adapters import Message
@@ -54,7 +53,7 @@ class GroupState:
     event: Event | None = None
     bot: Bot | None = None
     session: Session = field(
-        default_factory=lambda: Session(siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key)
+        default_factory=lambda: Session(siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
     )
     messages_chunk: list[MMessage] = field(default_factory=list)
     client = LLMClient(
@@ -127,10 +126,6 @@ reset = on_command(rule=is_group_message, permission=SUPERUSER, cmd="reset", ali
 reset_pm = on_command(
     rule=is_private_message, permission=SUPERUSER, cmd="reset", aliases={"重置"}, priority=0, block=True
 )
-get_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
-get_provider_pm = on_command(rule=is_private_message, permission=SUPERUSER, cmd="provider", priority=0, block=True)
-set_provider = on_command(rule=is_group_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
-set_provider_pm = on_command(rule=is_private_message, permission=SUPERUSER, cmd="set_provider", priority=0, block=True)
 get_presets = on_command(
     rule=is_group_message, permission=SUPERUSER, cmd="presets", aliases={"preset"}, priority=0, block=True
 )
@@ -171,9 +166,7 @@ async def do_get_presets(matcher: type[Matcher], group_id: int):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -218,9 +211,7 @@ async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -234,96 +225,6 @@ async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
         await matcher.finish(f"不存在的预设: {file}")
 
 
-@get_provider.handle()
-async def handle_get_provider(event: GroupMessageEvent):
-    group_id = event.group_id
-    await do_get_provider(get_provider, group_id)
-
-
-@get_provider_pm.handle()
-async def handle_get_provider_pm(args: Message = CommandArg()):
-    arg = args.extract_plain_text().strip()
-    if arg == "":
-        await get_provider_pm.finish("请提供<qq群号>")
-    group_id = int(arg)
-    await do_get_provider(get_provider_pm, group_id)
-
-
-async def do_get_provider(matcher: type[Matcher], group_id: int):
-    if group_id not in group_states:
-        allowed_groups = plugin_config.nyaturingtest_enabled_groups
-        if group_id not in allowed_groups:
-            return
-
-        # 如果第一次创建会话，拉起循环处理线程
-        if group_id not in group_states:
-            group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
-            )
-            global _tasks
-            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
-            _tasks.add(task)
-            task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    provider = state.client.type
-    await matcher.finish(f"当前提供者: {provider}")
-
-
-@set_provider.handle()
-async def handle_set_provider(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
-    provider = args.extract_plain_text().strip()
-    if provider == "":
-        await set_provider.finish("请提供<提供者>")
-    await do_set_provider(set_provider, group_id, provider)
-
-
-@set_provider_pm.handle()
-async def handle_set_provider_pm(args: Message = CommandArg()):
-    preset_args = args.extract_plain_text().strip().split(" ")
-    if len(preset_args) != 2:
-        await set_provider_pm.finish("请提供<群号> <提供者>")
-    group_id = int(preset_args[0])
-    provider = preset_args[1]
-    await do_set_provider(set_provider_pm, group_id, provider)
-
-
-async def do_set_provider(matcher: type[Matcher], group_id: int, provider: str):
-    if group_id not in group_states:
-        allowed_groups = plugin_config.nyaturingtest_enabled_groups
-        if group_id not in allowed_groups:
-            return
-
-        # 如果第一次创建会话，拉起循环处理线程
-        if group_id not in group_states:
-            group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
-            )
-            global _tasks
-            task = asyncio.create_task(spawn_state(state=group_states[group_id]))
-            _tasks.add(task)
-            task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    if provider in ["gemini", "openai"]:
-        if provider == "gemini":
-            state.client = LLMClient(client=genai.Client(api_key=plugin_config.nyaturingtest_chat_gemini_api_key))
-        elif provider == "openai":
-            state.client = LLMClient(
-                client=OpenAI(
-                    api_key=plugin_config.nyaturingtest_chat_openai_api_key,
-                    base_url=plugin_config.nyaturingtest_chat_openai_base_url,
-                )
-            )
-        await matcher.finish(f"已设置提供者为: {provider}")
-    else:
-        await matcher.finish("无效的提供者，请选择 'gemini' 或 'openai'")
-
 
 @help.handle()
 async def handle_help():
@@ -334,11 +235,8 @@ async def handle_help():
 3. calm - 冷静
 4. reset - 重置会话
 5. status - 获取状态
-6. provider - 获取当前提供商
-7. set_provider <提供者> - 设置提供商 (gemini/openai)
-8. set_presets <预设名称> <预设内容> - 设置预设
-9. presets - 获取可用预设
-9. help - 显示本帮助信息
+6. presets - 获取可用预设
+7. help - 显示本帮助信息
 ",
 """
     await help.finish(help_message)
@@ -353,12 +251,9 @@ async def handle_help_pm():
 3. calm <群号> - 冷静
 4. reset <群号> - 重置会话
 5. status <群号> - 获取状态
-6. provider <群号> - 获取当前提供商
-7. set_provider <群号> <提供者> - 设置提供商 (gemini/openai)
-8. set_presets <群号> <预设名称> <预设内容> - 设置预设
-9. presets <群号> - 获取可用预设
-10: list_groups - 获取启用nyabot的群组列表
-11. help - 显示本帮助信息
+6. presets <群号> - 获取可用预设
+7: list_groups - 获取启用nyabot的群组列表
+8. help - 显示本帮助信息
 ",
 """
     await help_pm.finish(help_message)
@@ -395,9 +290,7 @@ async def do_set_role(matcher: type[Matcher], group_id: int, name: str, role: st
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -433,9 +326,7 @@ async def do_get_role(matcher: type[Matcher], group_id: int):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -471,9 +362,7 @@ async def do_calm_down(matcher: type[Matcher], group_id: int):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -509,9 +398,7 @@ async def do_reset(matcher: type[Matcher], group_id: int):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -546,9 +433,7 @@ async def do_status(matcher: type[Matcher], group_id: int):
         # 如果第一次创建会话，拉起循环处理线程
         if group_id not in group_states:
             group_states[group_id] = GroupState(
-                session=Session(
-                    id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-                )
+                session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
             )
             global _tasks
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
@@ -572,7 +457,7 @@ async def handle_list_groups_pm():
 
 def llm_response(client: LLMClient, message: str) -> str:
     try:
-        result = client.generate_response(message)
+        result = client.generate_response(prompt=message, model=plugin_config.nyaturingtest_chat_openai_model)
         if result:
             return result
         else:
@@ -594,9 +479,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
     # 如果第一次创建会话，拉起循环处理线程
     if group_id not in group_states:
         group_states[group_id] = GroupState(
-            session=Session(
-                id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_embedding_siliconflow_api_key
-            )
+            session=Session(id=f"{group_id}", siliconflow_api_key=plugin_config.nyaturingtest_siliconflow_api_key)
         )
         global _tasks
         task = asyncio.create_task(spawn_state(state=group_states[group_id]))

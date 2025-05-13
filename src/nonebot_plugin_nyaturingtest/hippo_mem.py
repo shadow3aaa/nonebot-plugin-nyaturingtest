@@ -98,4 +98,6 @@ class HippoMemory:
         results = self.hippo.retrieve(queries=queries, num_to_retrieve=k)
         # make ruff happy
         assert isinstance(results, list)
-        return [doc for result in results for doc in result.docs]
+        docs = [doc for result in results for doc in result.docs]
+        # 去重
+        return list(set(docs))

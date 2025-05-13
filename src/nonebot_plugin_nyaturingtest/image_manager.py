@@ -1,4 +1,5 @@
 import base64
+from dataclasses import dataclass
 import hashlib
 import io
 import json
@@ -13,6 +14,52 @@ from nonebot_plugin_nyaturingtest.vlm import SiliconFlowVLM
 from .config import plugin_config
 
 IMAGE_CACHE_DIR = Path("image_cache")
+
+
+@dataclass
+class ImageWithDescription:
+    """
+    图片和描述
+    """
+
+    description: str
+    """
+    图像内容简述
+    """
+    emotion: str
+    """
+    图像情感关键词
+    """
+    image_base64: str
+    """
+    图像的base64编码字符串
+    """
+    is_sticker: bool = False
+    """
+    是否是贴图
+    """
+
+    def to_json(self) -> str:
+        """
+        将对象转换为JSON字符串
+        """
+        return json.dumps(self.__dict__, ensure_ascii=False)
+
+    @staticmethod
+    def from_json(json_str: str) -> "ImageWithDescription":
+        """
+        从JSON字符串转换为对象，错误时抛出
+        """
+        image_with_desc = ImageWithDescription("", "", "", False)
+        data = json.loads(json_str)
+        # 检查数据完整性
+        if not all(key in data for key in ["description", "emotion", "image_base64", "is_sticker"]):
+            raise ValueError("缺少必要的字段")
+        image_with_desc.description = data["description"]
+        image_with_desc.emotion = data["emotion"]
+        image_with_desc.image_base64 = data["image_base64"]
+        image_with_desc.is_sticker = data["is_sticker"]
+        return image_with_desc
 
 
 class ImageManager:
@@ -38,27 +85,28 @@ class ImageManager:
             IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             self._initialized = True
 
-    def _calculate_image_hash(self, image: bytes) -> str:
-        """
-        计算图片的SHA256哈希值
-        """
-        sha256_hash = hashlib.md5(image).hexdigest()
-        return sha256_hash
-
-    def get_image_description(self, image_base64: str) -> str | None:
+    def get_image_description(self, image_base64: str, is_sticker: bool) -> ImageWithDescription | None:
         """
         获取图片描述
         """
         image_bytes = base64.b64decode(image_base64)
         # 计算图片的SHA256哈希值
-        image_hash = self._calculate_image_hash(image_bytes)
+        image_hash = _calculate_image_hash(image_bytes)
         # 检查缓存
         cache = IMAGE_CACHE_DIR.joinpath(f"{image_hash}.json")
         if cache.exists():
             with open(cache, encoding="utf-8") as f:
                 image_with_desc_raw = f.read()
-                image_with_desc = json.loads(image_with_desc_raw)
-                return image_with_desc["description"]
+                try:
+                    image_with_desc = ImageWithDescription.from_json(image_with_desc_raw)
+                    if image_with_desc.is_sticker != is_sticker:
+                        image_with_desc.is_sticker = is_sticker
+                        # 修改缓存文件
+                        with open(cache, "w", encoding="utf-8") as f:
+                            f.write(image_with_desc.to_json())
+                    return image_with_desc
+                except ValueError:
+                    logger.error("缓存文件格式错误，重新生成")
 
         # 获取图片描述
         # 获取图片类型
@@ -80,6 +128,14 @@ class ImageManager:
                 image_base64=gif_transfromed,
                 image_format="jpeg",
             )
+            # 分析表达的情感
+            prompt = """这是一个动态图，每一张图代表了动态图的某一帧，黑色背景代表透明。请分析这个表情包表达的情感，
+            用中文给出'情感，类型，含义'的三元式描述，要求每个描述都是一个简单的词语"""
+            description_emotion = self._vlm.request(
+                prompt=prompt,
+                image_base64=gif_transfromed,
+                image_format="jpeg",
+            )
         else:
             prompt = "请用中文描述这张图片的内容。如果有文字，请把文字都描述出来。并尝试猜测这个图片的含义。最多100个字"
             description = self._vlm.request(
@@ -87,21 +143,31 @@ class ImageManager:
                 image_base64=image_base64,
                 image_format=image_format,
             )
+            # 分析表达的情感
+            prompt = """请分析这个表情包表达的情感，用中文给出'情感，类型，含义'的三元式描述，要求每个描述都是一个简单的
+            词语"""
+            description_emotion = self._vlm.request(
+                prompt=prompt,
+                image_base64=image_base64,
+                image_format="jpeg",
+            )
 
-        if not description:
+        if not description or not description_emotion:
             logger.error("VLM请求失败")
             return None
 
+        result = ImageWithDescription(
+            description=description,
+            emotion=description_emotion,
+            image_base64=image_base64,
+            is_sticker=is_sticker,
+        )
+
         # 缓存结果
         with open(cache, "w", encoding="utf-8") as f:
-            image_with_desc = {
-                "description": description,
-                "image_base64": image_base64,
-                "image_format": image_format,
-            }
-            f.write(json.dumps(image_with_desc, ensure_ascii=False))
+            f.write(result.to_json())
 
-        return description
+        return result
 
 
 def _transform_gif(gif_base64: str, similarity_threshold: float = 1000.0, max_frames: int = 15) -> str | None:
@@ -224,6 +290,14 @@ def _transform_gif(gif_base64: str, similarity_threshold: float = 1000.0, max_fr
     except Exception as e:
         logger.error(f"GIF转换失败: {e}", exc_info=True)  # 记录详细错误信息
         return None  # 其他错误也返回None
+
+
+def _calculate_image_hash(image: bytes) -> str:
+    """
+    计算图片的SHA256哈希值
+    """
+    sha256_hash = hashlib.md5(image).hexdigest()
+    return sha256_hash
 
 
 image_manager = ImageManager()

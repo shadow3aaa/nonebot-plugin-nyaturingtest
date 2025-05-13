@@ -670,10 +670,14 @@ async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot
                         async with await anyio.open_file(cache_path.joinpath(key), "wb") as f:
                             await f.write(image_bytes)
 
+                is_sticker = seg.data.get("sub_type") == 1
                 image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                description = image_manager.get_image_description(image_base64=image_base64)
+                description = image_manager.get_image_description(image_base64=image_base64, is_sticker=is_sticker)
                 if description:
-                    message_content += f"\n[图片/表情: {description}]\n"
+                    if is_sticker:
+                        message_content += f"\n[表情包] {description.emotion}\n"
+                    else:
+                        message_content += f"\n[图片] {description.description}\n"
             except Exception as e:
                 logger.error(f"Error: {e}")
                 message_content += "\n[图片/表情，网卡了加载不出来]\n"

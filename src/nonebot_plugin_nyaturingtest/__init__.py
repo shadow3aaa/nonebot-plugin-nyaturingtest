@@ -675,7 +675,7 @@ async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot
                 description = image_manager.get_image_description(image_base64=image_base64, is_sticker=is_sticker)
                 if description:
                     if is_sticker:
-                        message_content += f"\n[表情包] {description.emotion}\n"
+                        message_content += f"\n[表情包] [情感:{description.emotion}] [内容:{description.description}]\n"
                     else:
                         message_content += f"\n[图片] {description.description}\n"
             except Exception as e:

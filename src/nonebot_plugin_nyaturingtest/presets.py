@@ -76,5 +76,6 @@ def _load_presets_from_directory(directory: str = "./nya_presets"):
             except Exception as e:
                 logger.warning(f"无法加载预设 {filename}: {e}")
 
+
 # 模块导入时自动加载外部预设
 _load_presets_from_directory()

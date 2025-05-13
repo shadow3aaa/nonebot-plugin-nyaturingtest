@@ -21,15 +21,6 @@ from .profile import PersonProfile
 
 
 @dataclass
-class _GeneralizeResult:
-    """
-    泛化阶段的结果
-    """
-
-    keywords: list[str]
-
-
-@dataclass
 class _SearchResult:
     """
     检索阶段的结果
@@ -134,6 +125,7 @@ class Session:
         self.__name = "terminus"
         self.__role = "一个男性人类"
         self.global_memory = Memory()
+        self.long_term_memory.clear()
         self.profiles = {}
         self.global_emotion = EmotionState()
         self.last_response = []
@@ -234,7 +226,7 @@ class Session:
                     self.global_memory = Memory()
 
             # 恢复聊天总结
-            self.chat_summary = session_data.get("chat_summary", "")
+            self.chat_summary = str(session_data.get("chat_summary", ""))
 
             # 恢复用户档案
             self.profiles = {}
@@ -318,81 +310,25 @@ class Session:
 对现状的认识：{self.chat_summary}
 """
 
-    # 我们将对话分为四个阶段：
-    # 1. 泛化阶段：在这个阶段，llm提炼聊天记录和输入消息，泛化出一系列关键词
-    # 2. 检索阶段：在这个阶段，通过嵌入模型和泛化阶段的关键词从向量库中搜索相关信息
-    # 3. 反馈阶段：在这个阶段，llm从检索阶段得到相关信息，然后llm结合当前的对话进行反馈分析，得出场景总结和情感反馈，并
+    # 我们将对话分为三个阶段：
+    # 1. 检索阶段：在这个阶段，从hipporag中搜索聊天记录相关信息
+    # 2. 反馈阶段：在这个阶段，llm从检索阶段得到相关信息，然后llm结合当前的对话进行反馈分析，得出场景总结和情感反馈，并
     #    进行长期记忆更新
-    # 4. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
+    # 3. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
 
-    def __generalize_stage(self, messages_chunk: list[Message], llm: Callable[[str], str]) -> _GeneralizeResult:
-        """
-        泛化阶段
-        """
-        logger.debug("进入泛化阶段")
-        history = json.dumps(
-            [
-                {
-                    "user_name": msg.user_name,
-                    "content": msg.content,
-                }
-                for msg in self.global_memory.access() + messages_chunk
-            ],
-            ensure_ascii=False,
-            indent=2,
-        )
-        prompt = f"""
-你是一个对话关键词提炼+泛化系统，用于向量搜索的前置。请从以下对话和其总结中提取出相关关键词，并按json格式输出
-
-## 提取关键词时要注意：
-
-- 泛化: 提取出的相关关键词必须进行泛化，但也必须包括自身，比如"我今天吃了一个苹果"，提取出的“苹果”相关关键词则必须有“苹
-  果”，并且还要有“水果”，“食物”，“apple”，“果实”等泛化
-- 事物别名：特别的，要注意消息记录中的事物别名，提取出事物名作为关键词时也要包括它的别名（如：@小明 明酱你在干什么，则需
-  要提取出“小明”，“明酱”）
-
-对话历史如下：
-
-```json
-{history}
-```
-
-对话总结如下:
-
-{self.chat_summary}
-
-请严格遵守以上说明，输出符合以下格式的纯 JSON（数组长度不是格式要求），不要添加任何额外的文字或解释。
-```json
-{{
-  keywords: ["keyword1", "keyword2", "keyword3"]
-}}
-```
-"""
-        response = llm(prompt)
-        response = re.sub(r"^```json\s*|\s*```$", "", response)
-        logger.debug(f"泛化阶段llm返回：{response}")
-        try:
-            response_dict = json.loads(response)
-        except json.JSONDecodeError:
-            raise ValueError("LLM response is not valid JSON, response: " + response)
-        if "keywords" not in response_dict:
-            raise ValueError("LLM response is not valid JSON, response: " + response)
-        if not isinstance(response_dict["keywords"], list):
-            raise ValueError("LLM response is not valid JSON, response: " + response)
-
-        logger.debug(f"泛化出的关键词：{response_dict['keywords']}")
-        logger.debug("泛化阶段结束")
-        return _GeneralizeResult(keywords=response_dict["keywords"])
-
-    def __search_stage(self, genralize_stage_result: _GeneralizeResult) -> _SearchResult:
+    def __search_stage(self, messages_chunk: list[Message]) -> _SearchResult:
         """
         检索阶段
         """
         logger.debug("检索阶段开始")
-        keywords = genralize_stage_result.keywords
-        # 检索记忆
+        # 搜索 全部新消息 + 短期聊天记录 + 总结
+        retrieve_messages = (
+            [msg.content for msg in self.global_memory.access()]
+            + [msg.content for msg in messages_chunk]
+            + [self.chat_summary]
+        )
         try:
-            long_term_memory = self.long_term_memory.retrieve(keywords, k=5)
+            long_term_memory = self.long_term_memory.retrieve(retrieve_messages, k=2)
             logger.debug(f"搜索到的相关聊天记录记忆：{long_term_memory}")
         except Exception as e:
             logger.error(f"回忆聊天记录失败: {e}")
@@ -645,7 +581,7 @@ dominance: {self.global_emotion.dominance}
                 profile.merge_old_interactions()
 
             # 更新聊天总结
-            self.chat_summary = response_dict["summary"]
+            self.chat_summary = str(response_dict["summary"])
 
             logger.debug(f"反馈阶段更新聊天总结：{self.chat_summary}")
 
@@ -812,10 +748,8 @@ dominance: {self.global_emotion.dominance}
         """
         更新群聊消息
         """
-        # 泛化阶段
-        genralize_stage_result = self.__generalize_stage(messages_chunk=messages_chunk, llm=llm)
         # 检索阶段
-        search_stage_result = self.__search_stage(genralize_stage_result=genralize_stage_result)
+        search_stage_result = self.__search_stage(messages_chunk=messages_chunk)
         # 反馈阶段
         feedback_stage_result = self.__feedback_stage(
             messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm

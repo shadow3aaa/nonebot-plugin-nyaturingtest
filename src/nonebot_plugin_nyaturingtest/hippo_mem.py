@@ -25,7 +25,6 @@ class HippoMemory:
         self.collection_name = collection_name
 
         # 使用HippoRAG初始化记忆库
-        # TODO: 从持久化目录加载现有集合
         try:
             self.hippo = HippoRAG(
                 llm_model_name=llm_model,
@@ -36,7 +35,7 @@ class HippoMemory:
                 embedding_base_url="https://api.siliconflow.cn/v1",
                 save_dir=persist_directory,
             )
-            logger.info(f"已创建新的HippoRAG集合: {collection_name}")
+            logger.info(f"已创建/加载新的HippoRAG集合: {collection_name}")
         except Exception as e:
             logger.error(f"Failed to create HippoRAG collection: {e}")
 
@@ -47,14 +46,40 @@ class HippoMemory:
         """返回当前时间的 ISO 格式字符串"""
         return datetime.now().isoformat()
 
-    def save(self):
-        """持久化索引到本地文件夹。"""
-        # TODO: 添加持久化逻辑
-        pass
+    def clear(self) -> None:
+        """
+        清除所有记忆
+        """
+        # 删除索引文件
+        if os.path.exists(self.persist_directory):
+            for file in os.listdir(self.persist_directory):
+                file_path = os.path.join(self.persist_directory, file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                    elif os.path.isdir(file_path):
+                        os.rmdir(file_path)
+                except Exception as e:
+                    logger.error(f"Failed to delete {file_path}: {e}")
+        else:
+            logger.warning(f"Persist directory {self.persist_directory} does not exist.")
+        # 重新创建索引
+        try:
+            self.hippo = HippoRAG(
+                llm_model_name=self.hippo.global_config.llm_name,
+                llm_base_url=self.hippo.global_config.llm_base_url,
+                llm_api_key=self.hippo.global_config.llm_api_key,
+                embedding_model_name=self.hippo.global_config.embedding_model_name,
+                embedding_api_key=self.hippo.global_config.embedding_api_key,
+                embedding_base_url=self.hippo.global_config.embedding_base_url,
+                save_dir=self.persist_directory,
+            )
+        except Exception as e:
+            logger.error(f"Failed to recreate HippoRAG collection: {e}")
+            return
+        logger.info("已清除所有记忆")
 
-    def add_texts(
-        self, texts: list[str]
-    ) -> None:
+    def add_texts(self, texts: list[str]) -> None:
         """
         添加文本到长期记忆，带语义去重功能
 

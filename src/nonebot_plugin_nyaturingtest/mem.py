@@ -24,7 +24,7 @@ class Memory:
     短时记忆
     """
 
-    def __init__(self, length_limit: int = 20):
+    def __init__(self, length_limit: int = 10):
         """
         初始化记忆
         参数

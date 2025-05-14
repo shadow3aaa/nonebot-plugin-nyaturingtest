@@ -42,6 +42,8 @@ class HippoMemory:
 
         # 用于跟踪上次清理的时间
         self._last_forget = datetime.now()
+        # 缓存要索引的文本
+        self._cache = []
 
     def _now_str(self) -> str:
         """返回当前时间的 ISO 格式字符串"""
@@ -77,12 +79,23 @@ class HippoMemory:
 
     def add_texts(self, texts: list[str]) -> None:
         """
-        添加文本到长期记忆，带语义去重功能
+        添加文本到缓存
 
         Args:
             texts: 要添加的文本列表
         """
-        self.hippo.index(texts)
+        self._cache.extend(texts)
+
+    def index(self):
+        """
+        对缓存的文本进行索引，整理到长期记忆
+        """
+        if self._cache:
+            self.hippo.index(self._cache)
+            logger.info(f"已索引 {len(self._cache)} 条缓存文本")
+            self._cache.clear()
+        else:
+            logger.info("没有缓存的文本需要索引")
 
     def retrieve(self, queries: list[str], k: int = 5) -> list[str]:
         """

@@ -2,10 +2,10 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 import json
 import os
 import pickle
-import random
 import re
 import traceback
 
@@ -34,20 +34,28 @@ class _SearchResult:
     """
 
 
-@dataclass
-class _FeedbackResult:
+class _ChattingState(Enum):
+    ILDE = (0,)
     """
-    反馈阶段的结果
+    潜水状态
+    """
+    POP_ACTIVE = (1,)
+    """
+    冒泡状态
+    """
+    ACTIVE = (2,)
+    """
+    对话状态
     """
 
-    reply_desire: float
-    """
-    回复意愿
-    """
-    reply_messages_index: list[int]
-    """
-    想要回复消息的下标
-    """
+    def __str__(self):
+        match self:
+            case _ChattingState.ILDE:
+                return "潜水状态"
+            case _ChattingState.POP_ACTIVE:
+                return "冒泡状态"
+            case _ChattingState.ACTIVE:
+                return "对话状态"
 
 
 class Session:
@@ -103,6 +111,13 @@ class Session:
         对话总结
         """
         self.__role = "一个男性人类"
+        """
+        我的角色
+        """
+        self.__chatting_state = _ChattingState.ILDE
+        """
+        对话状态
+        """
 
         # 从文件加载会话状态（如果存在）
         self.load_session()
@@ -197,6 +212,7 @@ class Session:
                     {"time": msg.time.isoformat(), "user_name": msg.user_name, "content": msg.content}
                     for msg in self.last_response
                 ],
+                "chatting_state": self.__chatting_state.value,
             }
 
             # 写入文件
@@ -291,6 +307,9 @@ class Session:
                     Message(time=time, user_name=msg_data.get("user_name", ""), content=msg_data.get("content", ""))
                 )
 
+            # 恢复对话状态
+            self.__chatting_state = _ChattingState(session_data.get("chatting_state", _ChattingState.ILDE.value))
+
             logger.info(f"[Session {self.id}] 会话状态已加载")
         except Exception as e:
             logger.error(f"[Session {self.id}] 加载会话状态失败: {e}")
@@ -342,7 +361,7 @@ class Session:
     # 我们将对话分为三个阶段：
     # 1. 检索阶段：在这个阶段，从hipporag中搜索聊天记录相关信息
     # 2. 反馈阶段：在这个阶段，llm从检索阶段得到相关信息，然后llm结合当前的对话进行反馈分析，得出场景总结和情感反馈，并
-    #    进行长期记忆更新
+    #    进行长期记忆更新，评估自身要不要加入对话
     # 3. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
 
     def __search_stage(self, messages_chunk: list[Message]) -> _SearchResult:
@@ -373,7 +392,7 @@ class Session:
 
     def __feedback_stage(
         self, messages_chunk: list[Message], search_stage_result: _SearchResult, llm: Callable[[str], str]
-    ) -> _FeedbackResult:
+    ):
         """
         反馈总结阶段
         """
@@ -397,7 +416,7 @@ class Session:
 
 {self.__role}
 
-现在你正在回顾聊天信息，以客观视角分析“你的最新情绪”，整理信息保存，并对聊天内容做出总结
+现在你正在回顾聊天信息，以客观视角分析“你的最新情绪”，整理信息保存，并对聊天内容做出总结，最后评估自己要不要加入对话
 
 ---
 
@@ -407,16 +426,6 @@ class Session:
     - valence (愉悦度)：[-1.0, 1.0]
     - arousal (唤醒度)：[0.0, 1.0]
     - dominance (支配度)：[-1.0, 1.0]
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关记忆，评估你对“新
-  输入消息”的回复意愿，范围为[0.0, 1.0]，并且指出“新输入消息”中你想回复的内容的那些下标（无论你给出的回复意愿是多少，都
-  要返回至少一个你想回复的内容的下标，如果你需要回复多个消息或者你想要回复的内容不是连续的（如一个问题被拆为3个消息），那
-  么你需要按顺序返回它们全部的下标）
-  - 你的性格特质如下：
-    - 情绪高涨（正面）：乐于助人，喜欢互动，偶尔玩梗
-    - 情绪高涨（负面）：愤怒、逻辑性强，语言尖锐，喜欢指出他人错误
-    - 情绪低落：懒得搭理，偶尔跟风几句，但是不会因此随意攻击他人
-    - 情绪稳定：中立理性，温和，倾向于有逻辑的互动
-    - 极端情绪下可能会主动控制话题引导情绪恢复，也可能选择不回应冷静下来
 - 基于“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关记忆，评估你对“新
   输入消息”中**每条**消息的情感倾向
   - 如果消息和你完全无关，或你不感兴趣，那么给出的每个情感维度的值总是 0.0
@@ -500,41 +509,75 @@ class Session:
     - 如果你对自己有新的认知，则保存为自我认知信息，自我认知信息需要经过慎重考虑，主要参照你自己发送的消息，次要参照别人
       发送的消息，内容是对自我的认知（如：我喜欢吃苹果、我身上有纹身）
 
+- 基于“之前的对话状态”、“新输入消息”的内容和“历史聊天”的背景，结合你之前的情绪，你对相关人物的情绪倾向，还有检索到的相关
+  记忆，评估你是否要改变对话状态，规则如下：
+  - 对话状态分为三种：
+    - 0：潜水状态
+    - 1：冒泡状态
+    - 2：对话状态
+  - 如果你在状态0
+    - 可以转变到状态1，2，或者保持0
+    - 转变到状态1的可能原因：
+      - 你刚刚加入群聊（特征是消息历史只有1-3条），想要冒泡（即发一些无关，且无意义或意义不大，简短的内容表示你在看群）
+      - 你很久没有发言了，想要冒泡（即发一些无关，且无意义或意义不大，简短的内容表示你在看群）
+    - 转变到状态2的可能原因：
+      - 群里有人直接@你或者指出要你回复
+      - 群里有人质疑你是ai，无论有没有直接@你或者让你回复
+      - 讨论的内容你有足够的“检索到的相关记忆”了解，并且根据你的人设你想加入讨论
+    - 其它情况保持0
+  - 如果你在状态1
+    - 可以转变到状态0，或者保持1
+    - 转变到状态0的可能原因：
+      - 2-3条消息内没有人对你的冒泡（即发一些无关，且无意义或意义不大，简短的内容表示你在看群）消息做出有意义的非冒泡回
+        复
+    - 否则保持1
+  - 如果你在状态2
+    - 可以转变到状态0，或者保持2
+    - 转变到状态0的可能原因：
+      - 10条消息内没有人对你的消息做出相关回复
+      - 你发现你的记忆不足以支撑你参与讨论
+      - 根据你的人设，你对讨论的内容不再感兴趣
+    - 否则保持2
+
 ## 2. 输入信息
 
-1. 历史聊天
+- 之前的对话状态
 
-- 过去历史聊天总结：
+  - 状态{self.__chatting_state.value}
 
-{self.global_memory.access().compressed_history}
+- 历史聊天
 
-- 最近的聊天记录：
+  - 过去历史聊天总结：
 
-{self.global_memory.access().messages}
+  {self.global_memory.access().compressed_history}
 
-2. 新输入消息
+  - 最近的聊天记录：
 
-{[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
+    {self.global_memory.access().messages}
 
-3. 你之前的情绪
+- 新输入消息
 
-valence: {self.global_emotion.valence}
-arousal: {self.global_emotion.arousal}
-dominance: {self.global_emotion.dominance}
+  {[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
 
-4. 你对相关人物的情绪倾向
+- 你之前的情绪
 
-```json
-{related_profiles_json}
-```
+  valence: {self.global_emotion.valence}
+  arousal: {self.global_emotion.arousal}
+  dominance: {self.global_emotion.dominance}
 
-5. 检索到的相关记忆
+- 你对相关人物的情绪倾向
 
-{search_stage_result.mem_history}
+  ```json
+  {related_profiles_json}
+  ```
 
-6. 你在上次对话做出的总结
+- 检索到的相关记忆
 
-{self.chat_summary}
+  {search_stage_result.mem_history}
+
+- 你在上次对话做出的总结
+
+  {self.chat_summary}
 
 ---
 
@@ -542,10 +585,6 @@ dominance: {self.global_emotion.dominance}
 
 ```json
 {{
-  "reply_desire": {{
-    value: 0.0≤float≤1.0,
-    "reply_index": [0, 1, 2]
-  }},
   "emotion_tends": [
     {{
       "valence": 0.0≤float≤1.0,
@@ -569,7 +608,8 @@ dominance: {self.global_emotion.dominance}
     "dominance": -1.0≤float≤1.0
   }},
   "summary": "对聊天内容的总结",
-  "analyze_result": ["事件类信息", "资料类信息", "人物关系类信息", "自我认知类信息"]
+  "analyze_result": ["事件类信息", "资料类信息", "人物关系类信息", "自我认知类信息"],
+  "new_chatting_state": 0/1/2
 }}
 ```
 """
@@ -629,26 +669,18 @@ dominance: {self.global_emotion.dominance}
             self.long_term_memory.add_texts(response_dict["analyze_result"])
             logger.debug(f"反馈阶段更新长期记忆：{response_dict['analyze_result']}")
 
-            # 回复意愿
-            if "value" not in response_dict["reply_desire"]:
-                raise ValueError("Feedback validation error: missing 'value' field in reply_desire: " + response)
-            if "reply_index" not in response_dict["reply_desire"]:
-                raise ValueError("Feedback validation error: missing 'reply_index' field in reply_desire: " + response)
-
-            reply_desire = response_dict["reply_desire"]["value"]
-            reply_messages_index = response_dict["reply_desire"]["reply_index"]
-            if not isinstance(reply_desire, float):
-                raise ValueError("Feedback validation error: 'reply_desire.value' is not a float: " + str(reply_desire))
-            if not isinstance(reply_messages_index, list):
+            # 更新对话状态
+            if "new_chatting_state" not in response_dict:
                 raise ValueError(
-                    "Feedback validation error: 'reply_desire.reply_index' is not a list: " + str(reply_messages_index)
+                    "Feedback validation error: missing 'new_chatting_state' field in response: " + response
                 )
-
-            logger.debug(f"反馈阶段回复意愿：{reply_desire}")
-            logger.debug(f"可能回复消息: {[messages_chunk[index] for index in reply_messages_index]}")
+            if response_dict["new_chatting_state"] not in [0, 1, 2]:
+                raise ValueError(
+                    "Feedback validation error: 'new_chatting_state' is not 0, 1 or 2: " + str(response_dict)
+                )
+            self.__chatting_state = _ChattingState(response_dict["new_chatting_state"])
+            logger.debug(f"反馈阶段更新对话状态：{self.__chatting_state!s}")
             logger.debug("反馈阶段结束")
-
-            return _FeedbackResult(reply_desire=reply_desire, reply_messages_index=reply_messages_index)
         except json.JSONDecodeError as e:
             raise ValueError(f"Feedback stage JSON parsing error: {e} in response: {response}")
         except KeyError as e:
@@ -661,7 +693,6 @@ dominance: {self.global_emotion.dominance}
     def __chat_stage(
         self,
         search_stage_result: _SearchResult,
-        feedback_stage_result: _FeedbackResult,
         messages_chunk: list[Message],
         llm: Callable[[str], str],
     ) -> list[str]:
@@ -688,18 +719,36 @@ dominance: {self.global_emotion.dominance}
 
 {self.__role}
 
-现在，你在查看新消息并准备回复你感兴趣的内容
+现在，你在查看新消息并进行回复
 
 ---
 
 ## 1. 任务目标
 
-- 基于“新输入消息”的内容和“历史聊天”的背景，结合“你目前的情绪”和“你对相关人物的情绪倾向”，还有检索到的相关记忆，你的人设
-  (身份认知)，对“你要回复的消息”进行回复
-  - “你要回复的消息”全部出自“新输入消息”
+- 基于“你的对话状态”，“新输入消息”的内容和“历史聊天”的背景，结合“你目前的情绪”和“你对相关人物的情绪倾向”，还有检索到的相
+  关记忆，你的人设(身份认知)，进行发言
+
+对“你的对话状态”的介绍：
+
+- 对话状态分为二种：
+  - 1：冒泡状态
+  - 2：对话状态
 
 ## 2. 你必须遵守的限制：
 
+- 根据“你的对话状态”
+  - 如果你在状态1（冒泡状态）
+    - 这说明你之前在潜水状态，想要冒泡
+    - 如果你在“历史聊天”的总结和记录中都没有冒泡过，那么可以发送一条无关，且无意义或意义不大，简短的内容表示你在看群
+    - 如果不满足上一条，就不发送任何消息
+  - 如果你在状态2（对话状态）
+    - 这说明你正在活跃的参与话题
+    - 你自行决定是否回复和回复内容，主要考虑：
+      - 你想要回复的消息是否可能还没发送完，如果没有发送完，一般先不回复
+      - 你想要回复的内容所属的话题
+      - 你之前的回复内容
+      - 你对相关人物的情绪倾向和你的情绪
+      - 检索到的相关记忆
 - 对“新输入消息”的内容和“历史聊天”，“对话内容总结”，还有检索到的相关记忆未提到的内容，你必须假装你对此一无所知
   - 例如未提到“iPhone”，你就不能说出它是苹果公司生产的
 - 不得使用你自己的预训练知识，只能依赖“新输入消息”的内容和“历史聊天”，还有检索到的相关记忆
@@ -715,48 +764,44 @@ dominance: {self.global_emotion.dominance}
 
 ## 3. 输入信息
 
-1. 历史聊天
+- 你的对话状态
 
-- 过去历史聊天总结：
+ - 状态{self.__chatting_state.value}
 
-{self.global_memory.access().compressed_history}
+- 历史聊天
 
-- 最近的聊天记录：
+  - 过去历史聊天总结：
 
-{self.global_memory.access().messages}
+  {self.global_memory.access().compressed_history}
 
-2. 新输入消息
+  - 最近的聊天记录：
 
-{[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
+    {self.global_memory.access().messages}
 
-3. 你要回复的消息
+- 新输入消息
 
-{
-            [
-                f"{messages_chunk[index].user_name}: '{messages_chunk[index].content}'"
-                for index in feedback_stage_result.reply_messages_index
-            ]
-        }
+  {[f"{msg.user_name}: '{msg.content}'" for msg in messages_chunk]}
 
-4. 你目前的情绪
 
-valence: {self.global_emotion.valence}
-arousal: {self.global_emotion.arousal}
-dominance: {self.global_emotion.dominance}
+- 你目前的情绪
 
-5. 你对相关人物的情绪倾向
+  valence: {self.global_emotion.valence}
+  arousal: {self.global_emotion.arousal}
+  dominance: {self.global_emotion.dominance}
 
-```json
-{related_profiles_json}
-```
+- 你对相关人物的情绪倾向
 
-6. 检索到的相关记忆
+  ```json
+  {related_profiles_json}
+  ```
 
-{search_stage_result.mem_history}
+- 检索到的相关记忆
 
-7. 对话内容总结
+  {search_stage_result.mem_history}
 
-{self.chat_summary}
+- 对话内容总结
+
+  {self.chat_summary}
 
 ---
 
@@ -793,21 +838,19 @@ dominance: {self.global_emotion.dominance}
         # 检索阶段
         search_stage_result = self.__search_stage(messages_chunk=messages_chunk)
         # 反馈阶段
-        feedback_stage_result = self.__feedback_stage(
-            messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm
-        )
+        self.__feedback_stage(messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm)
         # 对话阶段
-        reply_threshold = random.uniform(0.35, 0.5)
-        if feedback_stage_result.reply_desire >= reply_threshold:
-            reply_messages = self.__chat_stage(
-                search_stage_result=search_stage_result,
-                feedback_stage_result=feedback_stage_result,
-                messages_chunk=messages_chunk,
-                llm=llm,
-            )
-        else:
-            reply_messages = None
-            logger.debug("回复意愿低于阈值，不回复")
+        match self.__chatting_state:
+            case _ChattingState.ILDE:
+                logger.debug("nyabot潜水中...")
+                reply_messages = None
+            case _ChattingState.POP_ACTIVE | _ChattingState.ACTIVE:
+                logger.debug("nyabot活跃/冒泡中...")
+                reply_messages = self.__chat_stage(
+                    search_stage_result=search_stage_result,
+                    messages_chunk=messages_chunk,
+                    llm=llm,
+                )
 
         # 压入消息记忆
         self.global_memory.update(messages_chunk)
@@ -821,6 +864,9 @@ dominance: {self.global_emotion.dominance}
             self.long_term_memory.add_texts(
                 texts=reply_messages,
             )
+        # 压缩，索引记忆
+        self.global_memory.compress_message()
+        self.long_term_memory.index()
 
         # 保存会话状态
         self.save_session()

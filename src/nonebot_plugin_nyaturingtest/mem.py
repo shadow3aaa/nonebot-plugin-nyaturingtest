@@ -105,7 +105,7 @@ class Memory:
         """
         return list({message.user_name for message in self.__messages})
 
-    def __compress_message(self):
+    def compress_message(self):
         """
         压缩历史消息
         """
@@ -163,4 +163,3 @@ class Memory:
         - message_chunk: 消息块
         """
         self.__messages.extend(message_chunk)
-        self.__compress_message()

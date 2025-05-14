@@ -225,7 +225,6 @@ async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
         await matcher.finish(f"不存在的预设: {file}")
 
 
-
 @help.handle()
 async def handle_help():
     help_message = """

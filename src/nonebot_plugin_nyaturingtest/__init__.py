@@ -487,7 +487,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
 
     user_id = event.get_user_id()
     message_content = await message2BotMessage(
-        bot_name=group_states[group_id].session.name(), group_id=group_id, message=event.get_message(), bot=bot
+        bot_name=group_states[group_id].session.name(), group_id=group_id, message=event.original_message, bot=bot
     )
     if not message_content:
         return
@@ -516,6 +516,7 @@ async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot
     将消息转换为机器人可读的消息
     """
     message_content = ""
+
     for seg in message:
         if seg.type == "text":
             message_content += f"{seg.data.get('text', '')}"
@@ -564,8 +565,8 @@ async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot
                 logger.error(f"Error: {e}")
                 message_content += "\n[图片/表情，网卡了加载不出来]\n"
         elif seg.type == "at":
-            id = seg.data.get("qq", "")
-            if id == "":
+            id = seg.data.get("qq")
+            if not id:
                 continue
             if id == str(bot.self_id):
                 # 由于机器人名并不等于qq群名，这里覆盖为设定名(bot_name)

@@ -628,8 +628,10 @@ class Session:
                 raise ValueError("Feedback validation error: missing 'summary' field in response: " + response)
             if "analyze_result" not in response_dict:
                 raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
-            if "reply_desire" not in response_dict:
-                raise ValueError("Feedback validation error: missing 'reply_desire' field in response: " + response)
+            if "new_chatting_state" not in response_dict:
+                raise ValueError(
+                    "Feedback validation error: missing 'new_chatting_state' field in response: " + response
+                )
 
             # 更新自身情感
             self.global_emotion.valence = response_dict["new_emotion"]["valence"]
@@ -662,18 +664,12 @@ class Session:
             logger.debug(f"反馈阶段更新聊天总结：{self.chat_summary}")
 
             # 更新长期记忆
-            if "analyze_result" not in response_dict:
-                raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
             if not isinstance(response_dict["analyze_result"], list):
                 raise ValueError("Feedback validation error: 'analyze_result' is not a list: " + str(response_dict))
             self.long_term_memory.add_texts(response_dict["analyze_result"])
             logger.debug(f"反馈阶段更新长期记忆：{response_dict['analyze_result']}")
 
             # 更新对话状态
-            if "new_chatting_state" not in response_dict:
-                raise ValueError(
-                    "Feedback validation error: missing 'new_chatting_state' field in response: " + response
-                )
             if response_dict["new_chatting_state"] not in [0, 1, 2]:
                 raise ValueError(
                     "Feedback validation error: 'new_chatting_state' is not 0, 1 or 2: " + str(response_dict)

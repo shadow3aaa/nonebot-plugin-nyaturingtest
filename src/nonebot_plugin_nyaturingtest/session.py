@@ -335,6 +335,7 @@ class Session:
         self.long_term_memory.add_texts(preset.relationships)
         self.long_term_memory.add_texts(preset.events)
         self.long_term_memory.add_texts(preset.bot_self)
+        self.long_term_memory.index()
         logger.info(f"加载预设：{filename} 成功")
         return True
 

@@ -4,7 +4,7 @@
 
 ## ✨ nonebot-plugin-nyaturingtest ✨
 
-#### **N**ot**Y**et**A**notherTuringTest
+**N**ot**Y**et**A**notherTuringTest
 
 <p>
     <a href="https://github.com/shadow3aaa/nonebot-plugin-nyaturingtest">
@@ -26,10 +26,9 @@
 ### 特点:
 
 - 具有基于 VAD 三维情感模型情感模块
-- 具有基于向量搜索的长期记忆和知识
+- 具有基于HippoRAG的仿海马体记忆
 - 能够从聊天信息中自主提取知识记忆
-- 能够考虑自身的情感状态和记忆自行选择要不要回复和回复内容，比较拟人
-- 能够对每个人类用户进行情感记忆
+- 能够自行决定是否回复
 - ~~不似人类~~
 
 ## 💿 安装
@@ -39,11 +38,11 @@
 >
 > - 一个有效的 openai 规范接口 api key (根据你的 base_url，可以不是 openai 的)
 > - 如果你的 openai api key 是从 google cloud 或者 azure, deepseek, 硅基流动，自己架设的 llm 服务等而非在 openai 申请的, 你需要在 `.env` 文件中配置 `nyaturingtest_chat_openai_base_url` 为对应的 api 地址
-> - 一个有效的硅基流动 api key 用于嵌入模型请求 (https://siliconflow.com/)
+> - 一个有效的硅基流动 api key 用于嵌入模型请求 (https://siliconflow.com/)，总结用的小模型请求等
 
 <details open>
 <summary>使用 nb-cli 安装</summary>
-在 nonebot2 项目的根目录下打开命令行, 输入以下指令即可安装
+在 nonebot2 项目的根目录下打开命令行, 输入以下指令即可安装（暂时不行，还未上架）
 
     nb plugin install nonebot-plugin-nyaturingtest --upgrade
 
@@ -101,19 +100,20 @@
 
 ## 📝 TODO
 
-- [ ] 权限控制
+- [*] 权限控制
 - [ ] 更多可选的语言模型供应商
 - [ ] 更多可选的嵌入模型供应商
 - [ ] 支持更多平台(目前支持: Onebot v11)
 - [ ] 优化机器人效果
-  - [ ] 让回复机制更加拟人
-  - [ ] 让回复欲望更加拟人
+  - [*] 让回复机制更加拟人
+  - [*] ~~让回复欲望更加拟人~~(已由llm自行在潜水/活跃状态转变)
   - [ ] 优化情感反馈机制
-  - [ ] 支持视觉模型
-  - [ ] 优化记忆模块
-    - [ ] 优化长期记忆检索
-    - [ ] 优化遗忘机制
-    - [ ] 对话时进行场景感知性总结
+  - [*] 支持视觉模型
+  - [*] 优化记忆模块
+    - [*] 优化长期记忆检索
+    - [*] 优化遗忘机制
+    - [*] 对话时进行场景感知性总结
+  - [ ] 让机器人学会发表情包
   - [ ] 支持多种语言
 
 ## 🎭 人格预设配置

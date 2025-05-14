@@ -30,10 +30,6 @@ class ImageWithDescription:
     """
     图像情感关键词
     """
-    image_base64: str
-    """
-    图像的base64编码字符串
-    """
     is_sticker: bool = False
     """
     是否是贴图
@@ -50,14 +46,13 @@ class ImageWithDescription:
         """
         从JSON字符串转换为对象，错误时抛出
         """
-        image_with_desc = ImageWithDescription("", "", "", False)
+        image_with_desc = ImageWithDescription("", "", False)
         data = json.loads(json_str)
         # 检查数据完整性
         if not all(key in data for key in ["description", "emotion", "image_base64", "is_sticker"]):
             raise ValueError("缺少必要的字段")
         image_with_desc.description = data["description"]
         image_with_desc.emotion = data["emotion"]
-        image_with_desc.image_base64 = data["image_base64"]
         image_with_desc.is_sticker = data["is_sticker"]
         return image_with_desc
 
@@ -159,7 +154,6 @@ class ImageManager:
         result = ImageWithDescription(
             description=description,
             emotion=description_emotion,
-            image_base64=image_base64,
             is_sticker=is_sticker,
         )
 

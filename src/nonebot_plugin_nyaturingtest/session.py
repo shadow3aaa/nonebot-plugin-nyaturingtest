@@ -35,15 +35,15 @@ class _SearchResult:
 
 
 class _ChattingState(Enum):
-    ILDE = (0,)
+    ILDE = 0
     """
     潜水状态
     """
-    POP_ACTIVE = (1,)
+    POP_ACTIVE = 1
     """
     冒泡状态
     """
-    ACTIVE = (2,)
+    ACTIVE = 2
     """
     对话状态
     """

@@ -855,14 +855,14 @@ class Session:
         # 压入消息记忆
         self.global_memory.update(messages_chunk)
         self.long_term_memory.add_texts(
-            texts=[msg.content for msg in messages_chunk],
+            texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk],
         )
         if reply_messages:
             self.global_memory.update(
                 [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
             )
             self.long_term_memory.add_texts(
-                texts=reply_messages,
+                texts=[f"'{self.__name}':'{msg}'" for msg in reply_messages],
             )
         # 压缩，索引记忆
         self.global_memory.compress_message()

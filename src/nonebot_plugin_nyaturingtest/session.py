@@ -344,6 +344,11 @@ class Session:
         获取机器人状态
         """
 
+        recent_messages = self.global_memory.access().messages
+        recent_messages_str = (
+            "\n".join([f"{msg.user_name}: {msg.content}" for msg in recent_messages]) if recent_messages else "没有消息"
+        )
+
         return f"""
 名字：
 {self.__name}
@@ -355,6 +360,12 @@ class Session:
 愉悦度：{self.global_emotion.valence}
 唤醒度：{self.global_emotion.arousal}
 支配度：{self.global_emotion.dominance}
+
+最近的消息：
+{recent_messages_str}
+
+对过去的总结：
+{self.global_memory.access().compressed_history}
 
 对现状的认识：{self.chat_summary}
 """

@@ -40,7 +40,7 @@ class _ChattingState(Enum):
     """
     潜水状态
     """
-    POP_ACTIVE = 1
+    BUBBLE = 1
     """
     冒泡状态
     """
@@ -53,7 +53,7 @@ class _ChattingState(Enum):
         match self:
             case _ChattingState.ILDE:
                 return "潜水状态"
-            case _ChattingState.POP_ACTIVE:
+            case _ChattingState.BUBBLE:
                 return "冒泡状态"
             case _ChattingState.ACTIVE:
                 return "对话状态"
@@ -117,6 +117,10 @@ class Session:
         self.__chatting_state = _ChattingState.ILDE
         """
         对话状态
+        """
+        self.__bubble_willing_sum = 0.0
+        """
+        冒泡意愿总和（冒泡意愿会累积）
         """
 
         # 从文件加载会话状态（如果存在）
@@ -692,7 +696,9 @@ class Session:
             logger.debug(f"nyabot潜水意愿：{idle_chance}")
             # 评估转换到状态1的概率
             bubble_chance = response_dict["willing"]["1"]
-            logger.debug(f"nyabot冒泡意愿：{bubble_chance}")
+            self.__bubble_willing_sum += bubble_chance
+            logger.debug(f"nyabot本次冒泡意愿：{bubble_chance}")
+            logger.debug(f"nyabot冒泡意愿累计：{self.__bubble_willing_sum}")
             # 评估转换到状态2的概率
             chat_chance = response_dict["willing"]["2"]
             logger.debug(f"nyabot对话意愿：{chat_chance}")
@@ -704,9 +710,11 @@ class Session:
                 case _ChattingState.ILDE:
                     if chat_chance >= random_value:
                         self.__chatting_state = _ChattingState.ACTIVE
-                    elif bubble_chance >= random_value:
-                        self.__chatting_state = _ChattingState.POP_ACTIVE
-                case _ChattingState.POP_ACTIVE:
+                        self.__bubble_willing_sum = 0.0
+                    elif self.__bubble_willing_sum >= random_value:
+                        self.__chatting_state = _ChattingState.BUBBLE
+                        self.__bubble_willing_sum = 0.0
+                case _ChattingState.BUBBLE:
                     if chat_chance >= random_value:
                         self.__chatting_state = _ChattingState.ACTIVE
                     elif idle_chance >= random_value:
@@ -888,7 +896,7 @@ class Session:
             case _ChattingState.ILDE:
                 logger.debug("nyabot潜水中...")
                 reply_messages = None
-            case _ChattingState.POP_ACTIVE:
+            case _ChattingState.BUBBLE:
                 logger.debug("nyabot冒泡中...")
                 reply_messages = self.__chat_stage(
                     search_stage_result=search_stage_result,

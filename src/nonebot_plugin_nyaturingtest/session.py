@@ -679,7 +679,7 @@ class Session:
             # 更新对话状态
             if not isinstance(response_dict["willing"], dict):
                 raise ValueError("Feedback validation error: 'willing' is not a dict: " + str(response_dict))
-            if not all(key in [0, 1, 2] for key in response_dict["willing"].keys()):
+            if not all(key in ["0", "1", "2"] for key in response_dict["willing"].keys()):
                 raise ValueError("Feedback validation error: 'willing' keys are not 0, 1 or 2: " + str(response_dict))
             if not all(
                 isinstance(value, int | float) and 0.0 <= value <= 1.0 for value in response_dict["willing"].values()
@@ -688,13 +688,13 @@ class Session:
                     "Feedback validation error: 'willing' values are not in range [0.0, 1.0]: " + str(response_dict)
                 )
             # 评估转换到状态0的概率
-            idle_chance = response_dict["willing"][0]
+            idle_chance = response_dict["willing"]["0"]
             logger.debug(f"nyabot潜水意愿：{idle_chance}")
             # 评估转换到状态1的概率
-            bubble_chance = response_dict["willing"][1]
+            bubble_chance = response_dict["willing"]["1"]
             logger.debug(f"nyabot冒泡意愿：{bubble_chance}")
             # 评估转换到状态2的概率
-            chat_chance = response_dict["willing"][2]
+            chat_chance = response_dict["willing"]["2"]
             logger.debug(f"nyabot对话意愿：{chat_chance}")
 
             random_value = random.uniform(0.0, 1.0)

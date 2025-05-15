@@ -114,10 +114,12 @@ class HippoMemory:
             包含检索结果的Document列表
         """
         # 切割(BAAI/bge-m3上限为8192tokens)
-        queries = []
+        logger.debug(f"查询文本: {queries}")
+        splited_queries = []
         for query in queries:
-            queries += _split_text_by_tokens(query, self.tokenizer, max_tokens=8192, overlap=100)
-        results = self.hippo.retrieve(queries=queries, num_to_retrieve=k)
+            splited_queries += _split_text_by_tokens(query, self.tokenizer, max_tokens=8192, overlap=100)
+        logger.debug(f"分割后的查询: {splited_queries}")
+        results = self.hippo.retrieve(queries=splited_queries, num_to_retrieve=k)
         # make ruff happy
         assert isinstance(results, list)
         docs = [doc for result in results for doc in result.docs]

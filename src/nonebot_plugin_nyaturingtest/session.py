@@ -702,17 +702,17 @@ class Session:
 
             match self.__chatting_state:
                 case _ChattingState.ILDE:
-                    if random_value > chat_chance:
+                    if chat_chance >= random_value:
                         self.__chatting_state = _ChattingState.ACTIVE
-                    elif random_value > bubble_chance:
+                    elif bubble_chance >= random_value:
                         self.__chatting_state = _ChattingState.POP_ACTIVE
                 case _ChattingState.POP_ACTIVE:
-                    if random_value > chat_chance:
+                    if chat_chance >= random_value:
                         self.__chatting_state = _ChattingState.ACTIVE
-                    elif random_value > idle_chance:
+                    elif idle_chance >= random_value:
                         self.__chatting_state = _ChattingState.ILDE
                 case _ChattingState.ACTIVE:
-                    if random_value > idle_chance:
+                    if idle_chance >= random_value:
                         self.__chatting_state = _ChattingState.ILDE
 
             logger.debug(f"反馈阶段更新对话状态：{self.__chatting_state!s}")

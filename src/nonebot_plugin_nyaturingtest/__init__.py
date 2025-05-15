@@ -62,6 +62,7 @@ class GroupState:
             base_url=plugin_config.nyaturingtest_chat_openai_base_url,
         )
     )
+    lock = asyncio.Lock()
 
 
 _tasks: set[asyncio.Task] = set()
@@ -75,12 +76,13 @@ async def spawn_state(state: GroupState):
         await asyncio.sleep(random.uniform(5.0, 10.0))  # 随机等待5-10秒模拟人类查看消息和理解，并且避免看不到连续消息
         if state.bot is None or state.event is None:
             continue
+        await state.lock.acquire()
         if len(state.messages_chunk) == 0:
             continue
-
         logger.debug(f"Processing message chunk: {state.messages_chunk}")
         messages_chunk = state.messages_chunk.copy()
         state.messages_chunk.clear()
+        state.lock.release()
         try:
             responses = state.session.update(messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x))
         except Exception as e:
@@ -502,6 +504,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
     # 获取该群的状态
     group_states[group_id].event = event
     group_states[group_id].bot = bot
+    await group_states[group_id].lock.acquire()
     group_states[group_id].messages_chunk.append(
         MMessage(
             time=datetime.now(),
@@ -509,6 +512,7 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
             content=message_content,
         )
     )
+    group_states[group_id].lock.release()
 
 
 async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot: Bot) -> str:

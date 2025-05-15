@@ -100,8 +100,10 @@ class ImageManager:
                         with open(cache, "w", encoding="utf-8") as f:
                             f.write(image_with_desc.to_json())
                     return image_with_desc
-                except ValueError:
-                    logger.error("缓存文件格式错误，重新生成")
+                except ValueError as e:
+                    logger.error(f"缓存文件({cache})格式错误，重新生成")
+                    logger.error(e)
+                    cache.unlink()  # 删除缓存文件
 
         # 获取图片描述
         # 获取图片类型

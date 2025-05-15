@@ -3,6 +3,7 @@ import os
 import shutil
 
 from nonebot import logger
+from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from hipporag import HippoRAG
 
@@ -16,7 +17,7 @@ class HippoMemory:
         embedding_api_key: str,
         persist_directory: str = "./hippo_index",
         collection_name: str = "hippo_collection",
-        embedding_model: str = "BAAI/bge-large-zh-v1.5",
+        embedding_model: str = "BAAI/bge-m3",
     ):
         # 确保存储目录存在
         os.makedirs(persist_directory, exist_ok=True)
@@ -43,7 +44,9 @@ class HippoMemory:
         # 用于跟踪上次清理的时间
         self._last_forget = datetime.now()
         # 缓存要索引的文本
-        self._cache = []
+        self._cache = ""
+        # 初始化分词器
+        self.tokenizer = AutoTokenizer.from_pretrained(embedding_model, trust_remote_code=True)
 
     def _now_str(self) -> str:
         """返回当前时间的 ISO 格式字符串"""
@@ -84,16 +87,19 @@ class HippoMemory:
         Args:
             texts: 要添加的文本列表
         """
-        self._cache.extend(texts)
+        for text in texts:
+            self._cache += text + "\n"
 
     def index(self):
         """
         对缓存的文本进行索引，整理到长期记忆
         """
         if self._cache:
-            self.hippo.index(self._cache)
+            # 切割(BAAI/bge-m3上限为8192tokens)
+            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8192, overlap=100)
+            self.hippo.index(texts)
             logger.info(f"已索引 {len(self._cache)} 条缓存文本")
-            self._cache.clear()
+            self._cache = ""
         else:
             logger.info("没有缓存的文本需要索引")
 
@@ -114,3 +120,28 @@ class HippoMemory:
         docs = [doc for result in results for doc in result.docs]
         # 去重
         return list(set(docs))
+
+
+def _split_text_by_tokens(
+    text: str, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast, max_tokens=8192, overlap=100
+) -> list[str]:
+    """
+    按照指定的最大 token 数量和重叠数量将文本分割成多个块
+    Args:
+        text: 要分割的文本
+        tokenizer: 用于分割文本的分词器
+        max_tokens: 每个块的最大 token 数量
+        overlap: 重叠的 token 数量
+    Returns:
+        分割后的文本块列表
+    """
+    tokens = tokenizer.encode(text, add_special_tokens=False)
+    chunks = []
+    start = 0
+    while start < len(tokens):
+        end = min(start + max_tokens, len(tokens))
+        chunk_tokens = tokens[start:end]
+        chunk_text = tokenizer.decode(chunk_tokens)
+        chunks.append(chunk_text)
+        start += max_tokens - overlap
+    return chunks

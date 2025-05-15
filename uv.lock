@@ -1684,6 +1684,7 @@ dependencies = [
     { name = "openai" },
     { name = "pillow" },
     { name = "requests" },
+    { name = "transformers" },
     { name = "uuid" },
 ]
 
@@ -1715,6 +1716,7 @@ requires-dist = [
     { name = "openai", specifier = "==1.58.1" },
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "transformers", specifier = ">=4.45.2" },
     { name = "uuid", specifier = ">=1.30" },
 ]
 

@@ -21,6 +21,7 @@ dependencies = [
   "uuid>=1.30",
   "pillow>=11.2.1",
   "hipporag",
+  "transformers>=4.45.2",
 ]
 
 [dependency-groups]

@@ -114,6 +114,10 @@ class HippoMemory:
         Returns:
             包含检索结果的Document列表
         """
+        # 切割(BAAI/bge-m3上限为8192tokens)
+        queries = []
+        for query in queries:
+            queries += _split_text_by_tokens(query, self.tokenizer, max_tokens=8192, overlap=100)
         results = self.hippo.retrieve(queries=queries, num_to_retrieve=k)
         # make ruff happy
         assert isinstance(results, list)

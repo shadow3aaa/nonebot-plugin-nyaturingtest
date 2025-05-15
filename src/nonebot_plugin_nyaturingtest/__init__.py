@@ -5,6 +5,7 @@ from datetime import datetime
 import random
 import re
 import ssl
+import traceback
 
 import anyio
 import httpx
@@ -88,6 +89,7 @@ async def spawn_state(state: GroupState):
                 )
             except Exception as e:
                 logger.error(f"Error: {e}")
+                traceback.print_exc()
                 continue
             if responses:
                 for response in responses:

@@ -6,6 +6,7 @@ from enum import Enum
 import json
 import os
 import pickle
+import random
 import re
 import traceback
 
@@ -520,34 +521,28 @@ class Session:
     - 如果你对自己有新的认知，则保存为自我认知信息，自我认知信息需要经过慎重考虑，主要参照你自己发送的消息，次要参照别人
       发送的消息，内容是对自我的认知（如：我喜欢吃苹果、我身上有纹身）
 
-- 评估你是否要改变对话状态，规则如下：
+- 评估你改变对话状态的意愿，规则如下：
+  - 意愿范围是[0.0, 1.0]
   - 对话状态分为三种：
     - 0：潜水状态
     - 1：冒泡状态
     - 2：对话状态
-  - 如果你在状态0
-    - 可以转变到状态1，2，或者保持0
-    - 如果满足以下条件之一，转变到状态1：
-      - 你刚刚加入群聊（特征是“历史聊天”-“最近的聊天记录”只有0-3条消息)
-      - 你很久没有发言(特征是“历史聊天”-“最近的聊天记录”和“历史聊天”-“过去历史聊天总结”没有你的参与)
-    - 如果满足以下条件之一，转变到状态2：
-      - 群里有人直接@你或者指出要你回复
-      - 群里有人质疑你是ai，无论有没有直接@你或者让你回复
-      - 讨论的内容你有足够的“检索到的相关记忆”了解，同时根据你的人设和记忆你想加入讨论
-    - 否则保持0
-  - 如果你在状态1
-    - 可以转变到状态0，或者保持1
-    - 如果满足以下条件，转变到状态0：
-      - 2-3条消息内没有人对你的冒泡（即发一些无关，且无意义或意义不大，简短的内容表示你在看群）消息做出有意义的非冒泡回
-        复
-    - 否则保持1
-  - 如果你在状态2
-    - 可以转变到状态0，或者保持2
-    - 如果满足以下条件之一，转变到状态0：
-      - 10条消息内没有人对你的消息做出相关回复
-      - 你发现你的记忆不足以支撑你参与讨论
-      - 根据你的人设，你对讨论的内容不再感兴趣
-    - 否则保持2
+  - 如果你在状态0，那么分别评估你转换到状态1，2的意愿，其它意愿设0.0为默认值即可
+  - 如果你在状态1，那么分别评估你转换到状态0，2的意愿，其它意愿设0.0为默认值即可
+  - 如果你在状态2，那么评估你转换到状态0的意愿，其它意愿设0.0为默认值即可
+  - 以下条件会影响转换到状态0的意愿：
+    - 你进行这个话题的时间，太久了会让你疲劳，更容易转变到状态0
+    - 是否有人回应你
+    - 你是否对这个话题感兴趣
+    - 你是否有足够的“检索到的相关记忆”了解
+  - 以下条件会影响转换到状态1的意愿：
+    - 你刚刚加入群聊（特征是“历史聊天”-“最近的聊天记录”只有0-3条消息)，提升
+    - 你很久没有发言(特征是“历史聊天”-“最近的聊天记录”和“历史聊天”-“过去历史聊天总结”没有你的参与)，提升
+  - 以下条件会影响转换到状态2的意愿：
+    - 讨论的内容你是否有足够的“检索到的相关记忆”了解
+    - 你是否对讨论的内容感兴趣
+    - 你自身的情感状态
+    - 你对相关人物的情感倾向
 
 ## 2. 输入信息
 
@@ -619,7 +614,11 @@ class Session:
   }},
   "summary": "对聊天内容的总结",
   "analyze_result": ["事件类信息", "资料类信息", "人物关系类信息", "自我认知类信息"],
-  "new_chatting_state": 0/1/2
+  "willing": {{
+    0: 0.0≤float≤1.0,
+    1: 0.0≤float≤1.0,
+    2: 0.0≤float≤1.0
+  }}
 }}
 ```
 """
@@ -638,10 +637,8 @@ class Session:
                 raise ValueError("Feedback validation error: missing 'summary' field in response: " + response)
             if "analyze_result" not in response_dict:
                 raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
-            if "new_chatting_state" not in response_dict:
-                raise ValueError(
-                    "Feedback validation error: missing 'new_chatting_state' field in response: " + response
-                )
+            if "willing" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'willing' field in response: " + response)
 
             # 更新自身情感
             self.global_emotion.valence = response_dict["new_emotion"]["valence"]
@@ -680,11 +677,39 @@ class Session:
             logger.debug(f"反馈阶段更新长期记忆：{response_dict['analyze_result']}")
 
             # 更新对话状态
-            if response_dict["new_chatting_state"] not in [0, 1, 2]:
+            if not isinstance(response_dict["willing"], dict):
+                raise ValueError("Feedback validation error: 'willing' is not a dict: " + str(response_dict))
+            if not all(key in [0, 1, 2] for key in response_dict["willing"].keys()):
+                raise ValueError("Feedback validation error: 'willing' keys are not 0, 1 or 2: " + str(response_dict))
+            if not all(
+                isinstance(value, int | float) and 0.0 <= value <= 1.0 for value in response_dict["willing"].values()
+            ):
                 raise ValueError(
-                    "Feedback validation error: 'new_chatting_state' is not 0, 1 or 2: " + str(response_dict)
+                    "Feedback validation error: 'willing' values are not in range [0.0, 1.0]: " + str(response_dict)
                 )
-            self.__chatting_state = _ChattingState(response_dict["new_chatting_state"])
+            # 评估转换到状态0的概率
+            idle_chance = response_dict["willing"][0]
+            # 评估转换到状态1的概率
+            bubble_chance = response_dict["willing"][1]
+            # 评估转换到状态2的概率
+            chat_chance = response_dict["willing"][2]
+
+            random_value = random.uniform(0.0, 1.0)
+            match self.__chatting_state:
+                case _ChattingState.ILDE:
+                    if random_value > chat_chance:
+                        self.__chatting_state = _ChattingState.ACTIVE
+                    elif random_value > bubble_chance:
+                        self.__chatting_state = _ChattingState.POP_ACTIVE
+                case _ChattingState.POP_ACTIVE:
+                    if random_value > chat_chance:
+                        self.__chatting_state = _ChattingState.ACTIVE
+                    elif random_value > idle_chance:
+                        self.__chatting_state = _ChattingState.ILDE
+                case _ChattingState.ACTIVE:
+                    if random_value > idle_chance:
+                        self.__chatting_state = _ChattingState.ILDE
+
             logger.debug(f"反馈阶段更新对话状态：{self.__chatting_state!s}")
             logger.debug("反馈阶段结束")
         except json.JSONDecodeError as e:
@@ -858,8 +883,15 @@ class Session:
             case _ChattingState.ILDE:
                 logger.debug("nyabot潜水中...")
                 reply_messages = None
-            case _ChattingState.POP_ACTIVE | _ChattingState.ACTIVE:
-                logger.debug("nyabot活跃/冒泡中...")
+            case _ChattingState.POP_ACTIVE:
+                logger.debug("nyabot冒泡中...")
+                reply_messages = self.__chat_stage(
+                    search_stage_result=search_stage_result,
+                    messages_chunk=messages_chunk,
+                    llm=llm,
+                )
+            case _ChattingState.ACTIVE:
+                logger.debug("nyabot对话中...")
                 reply_messages = self.__chat_stage(
                     search_stage_result=search_stage_result,
                     messages_chunk=messages_chunk,

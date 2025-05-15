@@ -689,12 +689,17 @@ class Session:
                 )
             # 评估转换到状态0的概率
             idle_chance = response_dict["willing"][0]
+            logger.debug(f"nyabot潜水意愿：{idle_chance}")
             # 评估转换到状态1的概率
             bubble_chance = response_dict["willing"][1]
+            logger.debug(f"nyabot冒泡意愿：{bubble_chance}")
             # 评估转换到状态2的概率
             chat_chance = response_dict["willing"][2]
+            logger.debug(f"nyabot对话意愿：{chat_chance}")
 
             random_value = random.uniform(0.0, 1.0)
+            logger.debug(f"意愿转变随机值：{random_value}")
+
             match self.__chatting_state:
                 case _ChattingState.ILDE:
                     if random_value > chat_chance:

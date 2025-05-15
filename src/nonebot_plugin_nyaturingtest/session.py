@@ -389,7 +389,7 @@ class Session:
             + [self.chat_summary]
         )
         try:
-            long_term_memory = self.long_term_memory.retrieve(retrieve_messages, k=2)
+            long_term_memory = self.long_term_memory.retrieve(retrieve_messages, k=3)
             logger.debug(f"搜索到的相关记忆：{long_term_memory}")
         except Exception as e:
             logger.error(f"回忆失败: {e}")

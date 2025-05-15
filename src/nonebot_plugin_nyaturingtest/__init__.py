@@ -74,23 +74,24 @@ async def spawn_state(state: GroupState):
     """
     while True:
         await asyncio.sleep(random.uniform(5.0, 10.0))  # 随机等待5-10秒模拟人类查看消息和理解，并且避免看不到连续消息
-        if state.bot is None or state.event is None:
-            continue
-        await state.lock.acquire()
-        if len(state.messages_chunk) == 0:
-            continue
-        logger.debug(f"Processing message chunk: {state.messages_chunk}")
-        messages_chunk = state.messages_chunk.copy()
-        state.messages_chunk.clear()
-        state.lock.release()
-        try:
-            responses = state.session.update(messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x))
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            continue
-        if responses:
-            for response in responses:
-                await state.bot.send(message=response, event=state.event)
+        async with state.lock:
+            if state.bot is None or state.event is None:
+                continue
+            if len(state.messages_chunk) == 0:
+                continue
+            logger.debug(f"Processing message chunk: {state.messages_chunk}")
+            messages_chunk = state.messages_chunk.copy()
+            state.messages_chunk.clear()
+            try:
+                responses = state.session.update(
+                    messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x)
+                )
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                continue
+            if responses:
+                for response in responses:
+                    await state.bot.send(message=response, event=state.event)
 
 
 group_states: dict[int, GroupState] = {}
@@ -175,8 +176,9 @@ async def do_get_presets(matcher: type[Matcher], group_id: int):
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
 
-    state = group_states[group_id]
-    presets = state.session.presets()
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        presets = state.session.presets()
     msg = "可选的预设:\n"
     for preset in presets:
         msg += f"- {preset}\n"
@@ -219,12 +221,12 @@ async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    if state.session.load_preset(filename=file):
-        await matcher.finish(f"预设已加载: {file}")
-    else:
-        await matcher.finish(f"不存在的预设: {file}")
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        if state.session.load_preset(filename=file):
+            await matcher.finish(f"预设已加载: {file}")
+        else:
+            await matcher.finish(f"不存在的预设: {file}")
 
 
 @help.handle()
@@ -297,9 +299,9 @@ async def do_set_role(matcher: type[Matcher], group_id: int, name: str, role: st
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    state.session.set_role(name=name, role=role)
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        state.session.set_role(name=name, role=role)
     await matcher.finish(f"角色已设为: {name}\n设定: {role}")
 
 
@@ -333,9 +335,9 @@ async def do_get_role(matcher: type[Matcher], group_id: int):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    role = state.session.role()
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        role = state.session.role()
     await matcher.finish(f"当前角色: {role}")
 
 
@@ -369,9 +371,9 @@ async def do_calm_down(matcher: type[Matcher], group_id: int):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
-    state.session.calm_down()
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        state.session.calm_down()
     await matcher.finish("已老实")
 
 
@@ -405,8 +407,9 @@ async def do_reset(matcher: type[Matcher], group_id: int):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-    state = group_states[group_id]
-    state.session.reset()
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
+        state.session.reset()
     await matcher.finish("已重置会话")
 
 
@@ -440,8 +443,8 @@ async def do_status(matcher: type[Matcher], group_id: int):
             task = asyncio.create_task(spawn_state(state=group_states[group_id]))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
-
-    state = group_states[group_id]
+    async with group_states[group_id].lock:
+        state = group_states[group_id]
     await matcher.finish(state.session.status())
 
 
@@ -488,9 +491,10 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         task.add_done_callback(_tasks.discard)
 
     user_id = event.get_user_id()
-    message_content = await message2BotMessage(
-        bot_name=group_states[group_id].session.name(), group_id=group_id, message=event.original_message, bot=bot
-    )
+    async with group_states[group_id].lock:
+        message_content = await message2BotMessage(
+            bot_name=group_states[group_id].session.name(), group_id=group_id, message=event.original_message, bot=bot
+        )
     if not message_content:
         return
 
@@ -502,17 +506,16 @@ async def handle_auto_chat(bot: Bot, event: GroupMessageEvent):
         nickname = str(user_id)
 
     # 获取该群的状态
-    group_states[group_id].event = event
-    group_states[group_id].bot = bot
-    await group_states[group_id].lock.acquire()
-    group_states[group_id].messages_chunk.append(
-        MMessage(
-            time=datetime.now(),
-            user_name=nickname,
-            content=message_content,
+    async with group_states[group_id].lock:
+        group_states[group_id].event = event
+        group_states[group_id].bot = bot
+        group_states[group_id].messages_chunk.append(
+            MMessage(
+                time=datetime.now(),
+                user_name=nickname,
+                content=message_content,
+            )
         )
-    )
-    group_states[group_id].lock.release()
 
 
 async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot: Bot) -> str:

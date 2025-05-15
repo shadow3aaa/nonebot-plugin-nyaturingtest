@@ -17,7 +17,6 @@ class HippoMemory:
         embedding_api_key: str,
         persist_directory: str = "./hippo_index",
         collection_name: str = "hippo_collection",
-        embedding_model: str = "BAAI/bge-m3",
     ):
         # 确保存储目录存在
         os.makedirs(persist_directory, exist_ok=True)
@@ -32,7 +31,7 @@ class HippoMemory:
                 llm_model_name=llm_model,
                 llm_base_url=llm_base_url,
                 llm_api_key=llm_api_key,
-                embedding_model_name=embedding_model,
+                embedding_model_name="BAAI/bge-m3",
                 embedding_api_key=embedding_api_key,
                 embedding_base_url="https://api.siliconflow.cn/v1",
                 save_dir=persist_directory,
@@ -46,7 +45,7 @@ class HippoMemory:
         # 缓存要索引的文本
         self._cache = ""
         # 初始化分词器
-        self.tokenizer = AutoTokenizer.from_pretrained(embedding_model, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-m3", trust_remote_code=True)
 
     def _now_str(self) -> str:
         """返回当前时间的 ISO 格式字符串"""

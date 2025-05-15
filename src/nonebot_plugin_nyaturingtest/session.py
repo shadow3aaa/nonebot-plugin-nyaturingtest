@@ -84,7 +84,6 @@ class Session:
             llm_api_key=plugin_config.nyaturingtest_chat_openai_api_key,
             llm_base_url=plugin_config.nyaturingtest_chat_openai_base_url,
             embedding_api_key=siliconflow_api_key,
-            embedding_model="BAAI/bge-large-zh-v1.5",
             persist_directory=f"./hippo_index_{id}",
         )
         """

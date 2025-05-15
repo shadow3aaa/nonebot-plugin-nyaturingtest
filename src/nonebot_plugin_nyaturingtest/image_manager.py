@@ -49,7 +49,7 @@ class ImageWithDescription:
         image_with_desc = ImageWithDescription("", "", False)
         data = json.loads(json_str)
         # 检查数据完整性
-        if not all(key in data for key in ["description", "emotion", "image_base64", "is_sticker"]):
+        if not all(key in data for key in ["description", "emotion", "is_sticker"]):
             raise ValueError("缺少必要的字段")
         image_with_desc.description = data["description"]
         image_with_desc.emotion = data["emotion"]

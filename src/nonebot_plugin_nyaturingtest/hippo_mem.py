@@ -97,7 +97,7 @@ class HippoMemory:
             # 切割(BAAI/bge-m3上限为8192tokens)
             texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8192, overlap=100)
             self.hippo.index(texts)
-            logger.info(f"已索引 {len(self._cache)} 条缓存文本")
+            logger.info(f"已索引 {len(texts)} 条缓存文本")
             self._cache = ""
         else:
             logger.info("没有缓存的文本需要索引")

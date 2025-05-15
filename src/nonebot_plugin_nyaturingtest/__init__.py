@@ -85,7 +85,7 @@ async def spawn_state(state: GroupState):
             responses = state.session.update(messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x))
         except Exception as e:
             logger.error(f"Error: {e}")
-            responses = ["发生错误，请稍后再试。"]
+            continue
         if responses:
             for response in responses:
                 await state.bot.send(message=response, event=state.event)

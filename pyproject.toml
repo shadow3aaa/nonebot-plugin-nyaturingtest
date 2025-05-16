@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-nyaturingtest"
-version = "0.2.0"
+version = "0.2.1"
 description = "也许是个有情感的聊天机器人"
 readme = "README.md"
 authors = [{ name = "shadow3aaa", email = "shadow3aaa@gmail.com" }]

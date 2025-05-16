@@ -105,7 +105,7 @@ class Memory:
         """
         return list({message.user_name for message in self.__messages})
 
-    def compress_message(self):
+    async def compress_message(self):
         """
         压缩历史消息
         """
@@ -129,7 +129,7 @@ class Memory:
 {history_messages}
 """
         try:
-            response = self.__llm_client.generate_response(prompt, model="Qwen/Qwen3-8B")
+            response = await self.__llm_client.generate_response(prompt, model="Qwen/Qwen3-8B")
             if response:
                 self.__compressed_message = response
                 logger.info(f"压缩消息成功: {response}")

@@ -5,15 +5,16 @@ import io
 import json
 from pathlib import Path
 
+import anyio
 from nonebot import logger
+import nonebot_plugin_localstore as store
 import numpy as np
 from PIL import Image
 
-from nonebot_plugin_nyaturingtest.vlm import SiliconFlowVLM
-
 from .config import plugin_config
+from .vlm import SiliconFlowVLM
 
-IMAGE_CACHE_DIR = Path("image_cache")
+IMAGE_CACHE_DIR = Path(f"{store.get_plugin_cache_dir()}/image_cache")
 
 
 @dataclass
@@ -80,7 +81,7 @@ class ImageManager:
             IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             self._initialized = True
 
-    def get_image_description(self, image_base64: str, is_sticker: bool) -> ImageWithDescription | None:
+    async def get_image_description(self, image_base64: str, is_sticker: bool) -> ImageWithDescription | None:
         """
         获取图片描述
         """
@@ -90,19 +91,20 @@ class ImageManager:
         # 检查缓存
         cache = IMAGE_CACHE_DIR.joinpath(f"{image_hash}.json")
         if cache.exists():
-            with open(cache, encoding="utf-8") as f:
-                image_with_desc_raw = f.read()
+            async with await anyio.open_file(cache, encoding="utf-8") as f:
+                image_with_desc_raw = await f.read()
                 try:
                     image_with_desc = ImageWithDescription.from_json(image_with_desc_raw)
                     if image_with_desc.is_sticker != is_sticker:
                         image_with_desc.is_sticker = is_sticker
                         # 修改缓存文件
-                        with open(cache, "w", encoding="utf-8") as f:
-                            f.write(image_with_desc.to_json())
+                        async with await anyio.open_file(cache, "w", encoding="utf-8") as f:
+                            await f.write(image_with_desc.to_json())
                     return image_with_desc
                 except ValueError as e:
                     logger.error(f"缓存文件({cache})格式错误，重新生成")
                     logger.error(e)
+                    cache.unlink()  # 删除缓存文件
                     cache.unlink()  # 删除缓存文件
 
         # 获取图片描述
@@ -120,7 +122,7 @@ class ImageManager:
                 return None
             prompt = """这是一个动态图，每一张图代表了动态图的某一帧，黑色背景代表透明。"请用中文描述这张图片的内容。如
             果有文字，请把文字都描述出来。并尝试猜测这个图片的含义。最多100个字"""
-            description = self._vlm.request(
+            description = await self._vlm.request(
                 prompt=prompt,
                 image_base64=gif_transfromed,
                 image_format="jpeg",
@@ -128,14 +130,14 @@ class ImageManager:
             # 分析表达的情感
             prompt = """这是一个动态图，每一张图代表了动态图的某一帧，黑色背景代表透明。请分析这个表情包表达的情感，
             用中文给出'情感，类型，含义'的三元式描述，要求每个描述都是一个简单的词语"""
-            description_emotion = self._vlm.request(
+            description_emotion = await self._vlm.request(
                 prompt=prompt,
                 image_base64=gif_transfromed,
                 image_format="jpeg",
             )
         else:
             prompt = "请用中文描述这张图片的内容。如果有文字，请把文字都描述出来。并尝试猜测这个图片的含义。最多100个字"
-            description = self._vlm.request(
+            description = await self._vlm.request(
                 prompt=prompt,
                 image_base64=image_base64,
                 image_format=image_format,
@@ -143,7 +145,7 @@ class ImageManager:
             # 分析表达的情感
             prompt = """请分析这个表情包表达的情感，用中文给出'情感，类型，含义'的三元式描述，要求每个描述都是一个简单的
             词语"""
-            description_emotion = self._vlm.request(
+            description_emotion = await self._vlm.request(
                 prompt=prompt,
                 image_base64=image_base64,
                 image_format="jpeg",
@@ -158,10 +160,9 @@ class ImageManager:
             emotion=description_emotion,
             is_sticker=is_sticker,
         )
-
         # 缓存结果
-        with open(cache, "w", encoding="utf-8") as f:
-            f.write(result.to_json())
+        async with await anyio.open_file(cache, "w", encoding="utf-8") as f:
+            await f.write(result.to_json())
 
         return result
 

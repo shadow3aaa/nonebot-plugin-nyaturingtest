@@ -3,6 +3,7 @@ import json
 import os
 
 from nonebot import logger
+import nonebot_plugin_localstore as store
 
 
 @dataclass
@@ -59,7 +60,7 @@ _猫娘预设 = RolePreset(
 PRESETS: dict[str, RolePreset] = {}
 
 
-def _load_presets_from_directory(directory: str = "./nya_presets"):
+def _load_presets_from_directory(directory: str = f"{store.get_plugin_config_dir()}/nya_presets"):
     # 如果文件夹不存在就创建并且写入例子(_猫娘预设)
     if not os.path.exists(directory):
         os.makedirs(directory)

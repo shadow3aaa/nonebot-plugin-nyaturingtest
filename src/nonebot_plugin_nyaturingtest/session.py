@@ -11,6 +11,7 @@ import re
 import traceback
 
 from nonebot import logger
+import nonebot_plugin_localstore as store
 from openai import AsyncOpenAI
 
 from .client import LLMClient
@@ -85,7 +86,7 @@ class Session:
             llm_api_key=plugin_config.nyaturingtest_chat_openai_api_key,
             llm_base_url=plugin_config.nyaturingtest_chat_openai_base_url,
             embedding_api_key=siliconflow_api_key,
-            persist_directory=f"./hippo_index_{id}",
+            persist_directory=f"{store.get_plugin_data_dir()}/hippo_index_{id}",
         )
         """
         对聊天记录的长期记忆 (基于HippoRAG)
@@ -176,8 +177,8 @@ class Session:
         获取会话文件路径
         """
         # 确保会话目录存在
-        os.makedirs("yaturningtest_sessions", exist_ok=True)
-        return f"yaturningtest_sessions/session_{self.id}.json"
+        os.makedirs(f"{store.get_plugin_data_dir()}/yaturningtest_sessions", exist_ok=True)
+        return f"{store.get_plugin_data_dir()}/yaturningtest_sessions/session_{self.id}.json"
 
     def save_session(self):
         """
@@ -925,7 +926,7 @@ class Session:
                 texts=[f"'{self.__name}':'{msg}'" for msg in reply_messages],
             )
         # 压缩，索引记忆
-        self.global_memory.compress_message()
+        await self.global_memory.compress_message()
         self.long_term_memory.index()
 
         # 保存会话状态

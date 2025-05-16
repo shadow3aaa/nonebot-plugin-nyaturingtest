@@ -9,7 +9,7 @@ import traceback
 
 import anyio
 import httpx
-from nonebot import logger, on_command, on_message
+from nonebot import logger, on_command, on_message, require
 from nonebot.adapters import Message
 from nonebot.adapters.onebot.v11 import (
     Bot,
@@ -28,6 +28,8 @@ from .config import Config, plugin_config
 from .image_manager import IMAGE_CACHE_DIR, image_manager
 from .mem import Message as MMessage
 from .session import Session
+
+require("nonebot_plugin_localstore")
 
 __plugin_meta__ = PluginMetadata(
     name="NYATuringTest",
@@ -564,7 +566,9 @@ async def message2BotMessage(bot_name: str, group_id: int, message: Message, bot
 
                 is_sticker = seg.data.get("sub_type") == 1
                 image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                description = image_manager.get_image_description(image_base64=image_base64, is_sticker=is_sticker)
+                description = await image_manager.get_image_description(
+                    image_base64=image_base64, is_sticker=is_sticker
+                )
                 if description:
                     if is_sticker:
                         message_content += f"\n[表情包] [情感:{description.emotion}] [内容:{description.description}]\n"

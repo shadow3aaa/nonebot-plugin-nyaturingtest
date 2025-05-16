@@ -23,13 +23,13 @@ from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 from openai import AsyncOpenAI
 
+require("nonebot_plugin_localstore")
+
 from .client import LLMClient
 from .config import Config, plugin_config
 from .image_manager import IMAGE_CACHE_DIR, image_manager
 from .mem import Message as MMessage
 from .session import Session
-
-require("nonebot_plugin_localstore")
 
 __plugin_meta__ = PluginMetadata(
     name="NYATuringTest",

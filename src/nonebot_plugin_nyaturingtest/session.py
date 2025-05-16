@@ -703,7 +703,7 @@ class Session:
             chat_chance = response_dict["willing"]["2"]
             logger.debug(f"nyabot对话意愿：{chat_chance}")
 
-            random_value = random.uniform(0.0, 1.0)
+            random_value = random.uniform(0.3, 0.7)
             logger.debug(f"意愿转变随机值：{random_value}")
 
             match self.__chatting_state:

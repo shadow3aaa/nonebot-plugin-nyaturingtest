@@ -1,12 +1,12 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 
 class LLMClient:
-    def __init__(self, client: OpenAI):
+    def __init__(self, client: AsyncOpenAI):
         self.client = client
 
-    def generate_response(self, prompt: str, model: str) -> str | None:
-        response = self.client.chat.completions.create(
+    async def generate_response(self, prompt: str, model: str) -> str | None:
+        response = await self.client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model=model,
             temperature=0.5,

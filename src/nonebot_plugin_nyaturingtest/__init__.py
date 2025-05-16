@@ -21,7 +21,7 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .client import LLMClient
 from .config import Config, plugin_config
@@ -58,7 +58,7 @@ class GroupState:
     )
     messages_chunk: list[MMessage] = field(default_factory=list)
     client = LLMClient(
-        client=OpenAI(
+        client=AsyncOpenAI(
             api_key=plugin_config.nyaturingtest_chat_openai_api_key,
             base_url=plugin_config.nyaturingtest_chat_openai_base_url,
         )
@@ -84,7 +84,7 @@ async def spawn_state(state: GroupState):
             messages_chunk = state.messages_chunk.copy()
             state.messages_chunk.clear()
             try:
-                responses = state.session.update(
+                responses = await state.session.update(
                     messages_chunk=messages_chunk, llm=lambda x: llm_response(state.client, x)
                 )
             except Exception as e:
@@ -461,9 +461,9 @@ async def handle_list_groups_pm():
     await list_groups_pm.finish(msg)
 
 
-def llm_response(client: LLMClient, message: str) -> str:
+async def llm_response(client: LLMClient, message: str) -> str:
     try:
-        result = client.generate_response(prompt=message, model=plugin_config.nyaturingtest_chat_openai_model)
+        result = await client.generate_response(prompt=message, model=plugin_config.nyaturingtest_chat_openai_model)
         if result:
             return result
         else:

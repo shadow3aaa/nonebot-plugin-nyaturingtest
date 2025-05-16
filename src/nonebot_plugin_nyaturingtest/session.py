@@ -1,5 +1,5 @@
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -11,7 +11,7 @@ import re
 import traceback
 
 from nonebot import logger
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .client import LLMClient
 from .config import plugin_config
@@ -71,7 +71,7 @@ class Session:
         """
         self.global_memory: Memory = Memory(
             llm_client=LLMClient(
-                client=OpenAI(
+                client=AsyncOpenAI(
                     api_key=plugin_config.nyaturingtest_siliconflow_api_key,
                     base_url="https://api.siliconflow.cn/v1",
                 )
@@ -257,7 +257,7 @@ class Session:
                         compressed_message=session_data["global_memory"].get("compressed_history", ""),
                         messages=[Message.from_json(msg) for msg in session_data["global_memory"].get("messages", [])],
                         llm_client=LLMClient(
-                            client=OpenAI(
+                            client=AsyncOpenAI(
                                 api_key=plugin_config.nyaturingtest_siliconflow_api_key,
                                 base_url="https://api.siliconflow.cn/v1",
                             )
@@ -267,7 +267,7 @@ class Session:
                     logger.error(f"[Session {self.id}] 恢复全局短时记忆失败: {e}")
                     self.global_memory = Memory(
                         llm_client=LLMClient(
-                            client=OpenAI(
+                            client=AsyncOpenAI(
                                 api_key=plugin_config.nyaturingtest_siliconflow_api_key,
                                 base_url="https://api.siliconflow.cn/v1",
                             )
@@ -406,8 +406,8 @@ class Session:
             mem_history=long_term_memory,
         )
 
-    def __feedback_stage(
-        self, messages_chunk: list[Message], search_stage_result: _SearchResult, llm: Callable[[str], str]
+    async def __feedback_stage(
+        self, messages_chunk: list[Message], search_stage_result: _SearchResult, llm: Callable[[str], Awaitable[str]]
     ):
         """
         反馈总结阶段
@@ -626,7 +626,7 @@ class Session:
 }}
 ```
 """
-        response = llm(prompt)
+        response = await llm(prompt)
         response = re.sub(r"^```json\s*|\s*```$", "", response)
         logger.debug(f"反馈阶段llm返回：{response}")
         try:
@@ -734,11 +734,11 @@ class Session:
         except Exception as e:
             raise ValueError(f"Feedback stage unexpected error: {e} in response: {response}")
 
-    def __chat_stage(
+    async def __chat_stage(
         self,
         search_stage_result: _SearchResult,
         messages_chunk: list[Message],
-        llm: Callable[[str], str],
+        llm: Callable[[str], Awaitable[str]],
     ) -> list[str]:
         """
         对话阶段
@@ -867,7 +867,7 @@ class Session:
   ]
 }}
 """
-        response = llm(prompt)
+        response = await llm(prompt)
         response = re.sub(r"^```json\s*|\s*```$", "", response)
         logger.debug(f"对话阶段llm返回：{response}")
         try:
@@ -884,14 +884,14 @@ class Session:
         except json.JSONDecodeError:
             raise ValueError("LLM response is not valid JSON, response: " + response)
 
-    def update(self, messages_chunk: list[Message], llm: Callable[[str], str]) -> list[str] | None:
+    async def update(self, messages_chunk: list[Message], llm: Callable[[str], Awaitable[str]]) -> list[str] | None:
         """
         更新群聊消息
         """
         # 检索阶段
         search_stage_result = self.__search_stage(messages_chunk=messages_chunk)
         # 反馈阶段
-        self.__feedback_stage(messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm)
+        await self.__feedback_stage(messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm)
         # 对话阶段
         match self.__chatting_state:
             case _ChattingState.ILDE:
@@ -899,14 +899,14 @@ class Session:
                 reply_messages = None
             case _ChattingState.BUBBLE:
                 logger.debug("nyabot冒泡中...")
-                reply_messages = self.__chat_stage(
+                reply_messages = await self.__chat_stage(
                     search_stage_result=search_stage_result,
                     messages_chunk=messages_chunk,
                     llm=llm,
                 )
             case _ChattingState.ACTIVE:
                 logger.debug("nyabot对话中...")
-                reply_messages = self.__chat_stage(
+                reply_messages = await self.__chat_stage(
                     search_stage_result=search_stage_result,
                     messages_chunk=messages_chunk,
                     llm=llm,

@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 
 class SiliconFlowVLM:
@@ -31,7 +31,7 @@ class SiliconFlowVLM:
             max_retries: 最大重试次数
             retry_delay: 重试延迟(秒)
         """
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=endpoint,
         )
@@ -40,7 +40,7 @@ class SiliconFlowVLM:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    def request(
+    async def request(
         self,
         prompt: str,
         image_base64: str,
@@ -49,7 +49,7 @@ class SiliconFlowVLM:
         """
         让vlm根据图片和文本提示词生成描述
         """
-        responese = self.client.chat.completions.create(
+        responese = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {

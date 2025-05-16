@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import json
 import os
 
@@ -65,7 +65,7 @@ def _load_presets_from_directory(directory: str = f"{store.get_plugin_config_dir
     if not os.path.exists(directory):
         os.makedirs(directory)
         with open(os.path.join(directory, "喵喵.json"), "w", encoding="utf-8") as f:
-            json.dump(_猫娘预设.__dict__, f, ensure_ascii=False, indent=4)
+            json.dump(asdict(_猫娘预设), f, ensure_ascii=False, indent=4)
     for filename in os.listdir(directory):
         if filename.endswith(".json"):
             path = os.path.join(directory, filename)

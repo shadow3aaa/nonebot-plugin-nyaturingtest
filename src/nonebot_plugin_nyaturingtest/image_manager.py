@@ -1,5 +1,5 @@
 import base64
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import hashlib
 import io
 import json
@@ -40,7 +40,7 @@ class ImageWithDescription:
         """
         将对象转换为JSON字符串
         """
-        return json.dumps(self.__dict__, ensure_ascii=False)
+        return json.dumps(asdict(self), ensure_ascii=False)
 
     @staticmethod
     def from_json(json_str: str) -> "ImageWithDescription":

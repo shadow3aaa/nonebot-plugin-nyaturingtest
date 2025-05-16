@@ -1,6 +1,6 @@
 from collections import deque
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 import json
@@ -420,7 +420,7 @@ class Session:
             [
                 {
                     "user_name": profile.user_id,
-                    "emotion_tends_to_user": profile.emotion.__dict__,
+                    "emotion_tends_to_user": asdict(profile.emotion),
                 }
                 for profile in related_profiles
             ],
@@ -751,7 +751,7 @@ class Session:
             [
                 {
                     "user_name": profile.user_id,
-                    "emotion_tends_to_user": profile.emotion.__dict__,
+                    "emotion_tends_to_user": asdict(profile.emotion),
                 }
                 for profile in related_profiles
             ],

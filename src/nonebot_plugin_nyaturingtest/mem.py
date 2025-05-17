@@ -1,4 +1,6 @@
+import asyncio
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -57,10 +59,6 @@ class MemoryRecord:
 
 
 class Memory:
-    """
-    短时记忆
-    """
-
     def __init__(
         self,
         llm_client: LLMClient,
@@ -68,36 +66,12 @@ class Memory:
         messages: list[Message] | None = None,
         length_limit: int = 10,
     ):
-        """
-        初始化记忆
-        参数
-
-        - length_limit: 记忆消息长度限制
-        """
         self.__length_limit = length_limit
-
-        if compressed_message:
-            self.__compressed_message = compressed_message
-            """
-            压缩后的旧消息
-            """
-        else:
-            self.__compressed_message = ""
-
-        if messages:
-            self.__messages = deque(messages, maxlen=length_limit * 5)  # 有4/5空间不可直接访问，用于放置待压缩消息
-            """
-            记忆消息列表
-            """
-        else:
-            self.__messages: deque[Message] = deque(
-                maxlen=length_limit * 5
-            )  # 有4/5空间不可直接访问，用于放置待压缩消息
-
+        self.__compressed_message = compressed_message or ""
+        self.__messages = deque(messages, maxlen=length_limit * 5) if messages else deque(maxlen=length_limit * 5)
         self.__llm_client = llm_client
-        """
-        用于压缩消息的 LLM 客户端
-        """
+        self.__compress_counter = 0
+        self.__compress_task: asyncio.Task | None = None  # 压缩任务句柄
 
     def related_users(self) -> list[str]:
         """
@@ -105,15 +79,20 @@ class Memory:
         """
         return list({message.user_name for message in self.__messages})
 
-    async def compress_message(self):
+    async def clear(self) -> None:
         """
-        压缩历史消息
+        清除所有记忆
         """
-        history_messages = [f"{message.user_name}: {message.content}" for message in self.__messages][
-            : self.__length_limit
-        ]
+        self.__messages.clear()
+        self.__compressed_message = ""
+        self.__compress_counter = 0
+        await self.__cancel_compress_task()
+        logger.info("已清除所有记忆")
+
+    async def __compress_message(self, after_compress: Callable[[], None] | None = None):
+        history_messages = [f"{msg.user_name}: {msg.content}" for msg in self.__messages]
         prompt = f"""
-请将以下消息分参与的话题压缩，保留
+请将以下消息分参与的话题压缩，提取
 
 - 话题简要内容
 - 参与者和它们的发言总结
@@ -130,21 +109,18 @@ class Memory:
 """
         try:
             response = await self.__llm_client.generate_response(prompt, model="Qwen/Qwen3-8B")
+            if after_compress:
+                after_compress()
             if response:
                 self.__compressed_message = response
                 logger.info(f"压缩消息成功: {response}")
             else:
                 logger.warning("压缩消息失败，原因未知")
+        except asyncio.CancelledError:
+            logger.info("压缩任务被取消")
+            raise
         except Exception as e:
             logger.error(f"压缩消息时发生错误: {e}")
-
-    def clear(self) -> None:
-        """
-        清除所有记忆
-        """
-        self.__messages.clear()
-        self.__compressed_message = ""
-        logger.info("已清除所有记忆")
 
     def access(self) -> MemoryRecord:
         """
@@ -155,11 +131,28 @@ class Memory:
             compressed_history=self.__compressed_message,
         )
 
-    def update(self, message_chunk: list[Message]):
+    async def __cancel_compress_task(self):
         """
-        更新记忆
-        参数
+        取消压缩任务
+        """
+        if self.__compress_task and not self.__compress_task.done():
+            self.__compress_task.cancel()
+            try:
+                await self.__compress_task
+            except asyncio.CancelledError:
+                pass
 
-        - message_chunk: 消息块
-        """
+    async def update(self, message_chunk: list[Message], after_compress: Callable[[], None] | None = None):
         self.__messages.extend(message_chunk)
+
+        # 每self.__length_limit条消息压缩一次
+        if self.__compress_counter < self.__length_limit:
+            self.__compress_counter += 1
+            return
+
+        self.__compress_counter = 0
+        # 如果有正在执行的压缩任务，先取消它
+        await self.__cancel_compress_task()
+
+        # 开启新的压缩任务
+        self.__compress_task = asyncio.create_task(self.__compress_message(after_compress=after_compress))

@@ -2,10 +2,9 @@ from datetime import datetime
 import os
 import shutil
 
-from nonebot import logger
-from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
-
 from hipporag import HippoRAG
+from nonebot import logger
+from transformers.models.auto.tokenization_auto import AutoTokenizer
 
 
 class HippoMemory:
@@ -128,7 +127,7 @@ class HippoMemory:
 
 
 def _split_text_by_tokens(
-    text: str, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast, max_tokens=8192, overlap=100
+    text: str, tokenizer, max_tokens=8192, overlap=100
 ) -> list[str]:
     """
     按照指定的最大 token 数量和重叠数量将文本分割成多个块

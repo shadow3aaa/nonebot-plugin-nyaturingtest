@@ -123,15 +123,20 @@ class Session:
         """
         冒泡意愿总和（冒泡意愿会累积）
         """
+        self.__update_hippo = False
+        """
+        是否重新索引，检索HippoRAG
+        """
+        self.__search_result = None
 
         # 从文件加载会话状态（如果存在）
         self.load_session()
 
-    def set_role(self, name: str, role: str):
+    async def set_role(self, name: str, role: str):
         """
         设置角色
         """
-        self.reset()
+        await self.reset()
         self.__role = role
         self.__name = name
         self.save_session()  # 保存角色设置变更
@@ -148,13 +153,13 @@ class Session:
         """
         return self.__name
 
-    def reset(self):
+    async def reset(self):
         """
         重置会话
         """
         self.__name = "terminus"
         self.__role = "一个男性人类"
-        self.global_memory.clear()
+        await self.global_memory.clear()
         self.long_term_memory.clear()
         self.profiles = {}
         self.global_emotion = EmotionState()
@@ -326,7 +331,7 @@ class Session:
         """
         return [f"{filename}: {preset.name} {preset.role}" for filename, preset in PRESETS.items() if not preset.hidden]
 
-    def load_preset(self, filename: str) -> bool:
+    async def load_preset(self, filename: str) -> bool:
         """
         加载预设
         """
@@ -334,8 +339,7 @@ class Session:
             logger.error(f"不存在的预设：{filename}")
             return False
         preset = PRESETS[filename]
-        self.reset()
-        self.set_role(preset.name, preset.role)
+        await self.set_role(preset.name, preset.role)
         self.long_term_memory.add_texts(preset.knowledges)
         self.long_term_memory.add_texts(preset.relationships)
         self.long_term_memory.add_texts(preset.events)
@@ -381,16 +385,18 @@ class Session:
     #    进行长期记忆更新，评估自身要不要加入对话
     # 3. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
 
-    def __search_stage(self, messages_chunk: list[Message]) -> _SearchResult:
+    def __search_stage(self):
         """
         检索阶段
         """
+        if not self.__update_hippo:
+            return
+        self.__update_hippo = False
         logger.debug("检索阶段开始")
-        # 搜索 全部新消息 + 短期聊天记录 + 历史总结 + 环境总结
+        # 搜索 短期聊天记录 + 历史总结 + 环境总结
         retrieve_messages = (
             [f"'{msg.user_name}':'{msg.content}'" for msg in self.global_memory.access().messages]
             + [self.global_memory.access().compressed_history]
-            + [msg.content for msg in messages_chunk]
             + [self.chat_summary]
         )
         try:
@@ -403,13 +409,11 @@ class Session:
 
         logger.debug("检索阶段结束")
 
-        return _SearchResult(
+        self.__search_result = _SearchResult(
             mem_history=long_term_memory,
         )
 
-    async def __feedback_stage(
-        self, messages_chunk: list[Message], search_stage_result: _SearchResult, llm: Callable[[str], Awaitable[str]]
-    ):
+    async def __feedback_stage(self, messages_chunk: list[Message], llm: Callable[[str], Awaitable[str]]):
         """
         反馈总结阶段
         """
@@ -427,6 +431,10 @@ class Session:
             ensure_ascii=False,
             indent=2,
         )
+        if self.__search_result:
+            search_stage_result = self.__search_result.mem_history
+        else:
+            search_stage_result = []
         prompt = f"""
 你是QQ群用户 {self.__name}，不是 AI，而是一个有自我认知的真实用户，（你称自己为 "{self.__name}"），你的人设(身份认知)如
 下:
@@ -583,7 +591,7 @@ class Session:
 
 - 检索到的相关记忆
 
-  {search_stage_result.mem_history}
+  {search_stage_result}
 
 - 你在上次对话做出的总结
 
@@ -737,7 +745,6 @@ class Session:
 
     async def __chat_stage(
         self,
-        search_stage_result: _SearchResult,
         messages_chunk: list[Message],
         llm: Callable[[str], Awaitable[str]],
     ) -> list[str]:
@@ -758,6 +765,10 @@ class Session:
             ensure_ascii=False,
             indent=2,
         )
+        if self.__search_result:
+            search_stage_result = self.__search_result.mem_history
+        else:
+            search_stage_result = []
         prompt = f"""
 你是QQ群用户 {self.__name}，不是 AI，而是一个有自我认知的真实用户，（你称自己为 "{self.__name}"），你的人设(身份认知)如
 下:
@@ -784,8 +795,8 @@ class Session:
 - 根据“你的对话状态”
   - 如果你在状态1（冒泡状态）
     - 这说明你之前在潜水状态，想要冒泡
-    - 如果你在“历史聊天”的的话题参与者中没有出现过，同时在最近的聊天记录也没有发言，那么必须发送一条无关，意义不大，简短
-      的内容表示你在看群，如“👀”
+    - 如果你在“历史聊天”（不包括检索到的相关记忆）的的话题参与者中没有出现过，同时在最近的聊天记录也没有发言，那么必须发
+      送一条无关，意义不大，简短的内容表示你在看群，如“👀”或者符合你人设的
     - 如果不满足上一条，就不发送任何消息
   - 如果你在状态2（对话状态）
     - 这说明你正在活跃的参与话题
@@ -851,7 +862,7 @@ class Session:
 
 - 检索到的相关记忆
 
-  {search_stage_result.mem_history}
+  {search_stage_result}
 
 - 对话内容总结
 
@@ -890,9 +901,9 @@ class Session:
         更新群聊消息
         """
         # 检索阶段
-        search_stage_result = self.__search_stage(messages_chunk=messages_chunk)
+        self.__search_stage()
         # 反馈阶段
-        await self.__feedback_stage(messages_chunk=messages_chunk, search_stage_result=search_stage_result, llm=llm)
+        await self.__feedback_stage(messages_chunk=messages_chunk, llm=llm)
         # 对话阶段
         match self.__chatting_state:
             case _ChattingState.ILDE:
@@ -901,33 +912,36 @@ class Session:
             case _ChattingState.BUBBLE:
                 logger.debug("nyabot冒泡中...")
                 reply_messages = await self.__chat_stage(
-                    search_stage_result=search_stage_result,
                     messages_chunk=messages_chunk,
                     llm=llm,
                 )
             case _ChattingState.ACTIVE:
                 logger.debug("nyabot对话中...")
                 reply_messages = await self.__chat_stage(
-                    search_stage_result=search_stage_result,
                     messages_chunk=messages_chunk,
                     llm=llm,
                 )
 
         # 压入消息记忆
-        self.global_memory.update(messages_chunk)
-        self.long_term_memory.add_texts(
-            texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk],
-        )
+        def enable_update_hippo():
+            self.__update_hippo = True
+
         if reply_messages:
-            self.global_memory.update(
-                [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages]
-            )
             self.long_term_memory.add_texts(
-                texts=[f"'{self.__name}':'{msg}'" for msg in reply_messages],
+                texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk]
+                + [f"'{self.__name}':'{msg}'" for msg in reply_messages],
             )
-        # 压缩，索引记忆
-        await self.global_memory.compress_message()
-        self.long_term_memory.index()
+            await self.global_memory.update(
+                messages_chunk
+                + [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages],
+                after_compress=enable_update_hippo,
+            )
+        else:
+            self.long_term_memory.add_texts(
+                texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk],
+            )
+
+            await self.global_memory.update(messages_chunk, after_compress=enable_update_hippo)
 
         # 保存会话状态
         self.save_session()

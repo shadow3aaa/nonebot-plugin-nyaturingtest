@@ -305,7 +305,7 @@ async def do_set_role(matcher: type[Matcher], group_id: int, name: str, role: st
             task.add_done_callback(_tasks.discard)
     async with group_states[group_id].lock:
         state = group_states[group_id]
-        state.session.set_role(name=name, role=role)
+        await state.session.set_role(name=name, role=role)
     await matcher.finish(f"角色已设为: {name}\n设定: {role}")
 
 
@@ -413,7 +413,7 @@ async def do_reset(matcher: type[Matcher], group_id: int):
             task.add_done_callback(_tasks.discard)
     async with group_states[group_id].lock:
         state = group_states[group_id]
-        state.session.reset()
+        await state.session.reset()
     await matcher.finish("已重置会话")
 
 

@@ -146,11 +146,11 @@ class Memory:
         self.__messages.extend(message_chunk)
 
         # 每self.__length_limit条消息压缩一次
+        self.__compress_counter += len(message_chunk)
         if self.__compress_counter < self.__length_limit:
-            self.__compress_counter += 1
             return
-
         self.__compress_counter = 0
+
         # 如果有正在执行的压缩任务，先取消它
         await self.__cancel_compress_task()
 

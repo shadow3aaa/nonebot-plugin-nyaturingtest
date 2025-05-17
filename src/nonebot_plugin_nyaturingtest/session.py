@@ -808,6 +808,7 @@ class Session:
       - 你之前对此话题的发言内容/主张
       - 你对相关人物的情绪倾向和你的情绪
       - 检索到的相关记忆
+  - 无论发言/不发言，都要总结你这么做的原因到"debug_reason"字段
 - 对“新输入消息”的内容和“历史聊天”，“对话内容总结”，还有检索到的相关记忆未提到的内容，你必须假装你对此一无所知
   - 例如未提到“iPhone”，你就不能说出它是苹果公司生产的
 - 不得使用你自己的预训练知识，只能依赖“新输入消息”的内容和“历史聊天”，还有检索到的相关记忆
@@ -876,7 +877,8 @@ class Session:
 {{
   "reply": [
     "回复内容1"
-  ]
+  ],
+  "debug_reason": "发言/不发言的原因"
 }}
 """
         response = await llm(prompt)
@@ -890,6 +892,14 @@ class Session:
                 raise ValueError("LLM response is not valid JSON, response: " + response)
 
             logger.debug(f"对话阶段回复内容：{response_dict['reply']}")
+
+            if "debug_reason" not in response_dict:
+                raise ValueError("LLM response is not valid JSON, response: " + response)
+            if not isinstance(response_dict["debug_reason"], str):
+                raise ValueError("LLM response is not valid JSON, response: " + response)
+
+            logger.debug(f"对话阶段回复/不回复原因:{response_dict['debug_reason']}")
+
             logger.debug("对话阶段结束")
 
             return response_dict["reply"]

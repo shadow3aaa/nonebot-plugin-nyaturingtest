@@ -534,7 +534,6 @@ class Session:
   - 自我认知类
     - 如果你对自己有新的认知，则保存为自我认知信息，自我认知信息需要经过慎重考虑，主要参照你自己发送的消息，次要参照别人
       发送的消息，内容是对自我的认知（如：我喜欢吃苹果、我身上有纹身）
-
 - 评估你改变对话状态的意愿，规则如下：
   - 意愿范围是[0.0, 1.0]
   - 对话状态分为三种：
@@ -557,6 +556,9 @@ class Session:
     - 你是否对讨论的内容感兴趣
     - 你自身的情感状态
     - 你对相关人物的情感倾向
+- 是否需要检索记忆
+  - 当对话需要专业知识或特定信息理解时选择，如果对方提到你不太认识的人名或实体或者目前给出的信息没有的信息时也可以尝试选
+    择
 
 ## 2. 输入信息
 
@@ -632,7 +634,8 @@ class Session:
     "0": 0.0≤float≤1.0,
     "1": 0.0≤float≤1.0,
     "2": 0.0≤float≤1.0
-  }}
+  }},
+  "do_search": true/false
 }}
 ```
 """
@@ -653,6 +656,8 @@ class Session:
                 raise ValueError("Feedback validation error: missing 'analyze_result' field in response: " + response)
             if "willing" not in response_dict:
                 raise ValueError("Feedback validation error: missing 'willing' field in response: " + response)
+            if "do_search" not in response_dict:
+                raise ValueError("Feedback validation error: missing 'do_search' field in response: " + response)
 
             # 更新自身情感
             self.global_emotion.valence = response_dict["new_emotion"]["valence"]
@@ -734,6 +739,14 @@ class Session:
                         self.__chatting_state = _ChattingState.ILDE
 
             logger.debug(f"反馈阶段更新对话状态：{self.__chatting_state!s}")
+
+            # 更新检索记忆
+            if not isinstance(response_dict["do_search"], bool):
+                raise ValueError("Feedback validation error: 'do_search' is not a bool: " + str(response_dict))
+            logger.debug(f"反馈阶段是否请求更新检索记忆：{response_dict['do_search']}")
+            self.__update_hippo = response_dict["do_search"]
+            self.__search_stage()
+
             logger.debug("反馈阶段结束")
         except json.JSONDecodeError as e:
             raise ValueError(f"Feedback stage JSON parsing error: {e} in response: {response}")

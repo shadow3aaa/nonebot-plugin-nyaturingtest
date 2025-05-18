@@ -104,7 +104,9 @@ class HippoMemory:
         if self._cache:
             # 切割(BAAI/bge-m3上限为8192tokens)
             texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8192, overlap=100)
-            self.hippo.index(texts)
+            texts_list = _split_texts_by_byte_limit(texts, max_bytes=30_000)
+            for texts in texts_list:
+                self.hippo.index(texts)
             logger.info(f"已索引 {len(texts)} 条缓存文本")
             self._cache = ""
         else:
@@ -127,12 +129,18 @@ class HippoMemory:
         for query in queries:
             splited_queries += _split_text_by_tokens(query, self.tokenizer, max_tokens=8192, overlap=100)
         logger.debug(f"分割后的查询: {splited_queries}")
-        results = self.hippo.retrieve(queries=splited_queries, num_to_retrieve=k)
-        # make ruff happy
-        assert isinstance(results, list)
-        docs = [doc for result in results for doc in result.docs]
+        query_batches = _split_texts_by_byte_limit(splited_queries, max_bytes=30_000)
+
+        all_docs: set[str] = set()
+        for batch in query_batches:
+            results = self.hippo.retrieve(queries=batch, num_to_retrieve=k)
+            # make ruff happy
+            assert isinstance(results, list)
+            docs = [doc for result in results for doc in result.docs]
+            all_docs.update(docs)
+
         # 去重
-        return list(set(docs))
+        return list(all_docs)
 
 
 def _split_text_by_tokens(text: str, tokenizer, max_tokens=8192, overlap=100) -> list[str]:
@@ -156,3 +164,43 @@ def _split_text_by_tokens(text: str, tokenizer, max_tokens=8192, overlap=100) ->
         chunks.append(chunk_text)
         start += max_tokens - overlap
     return chunks
+
+
+def _split_texts_by_byte_limit(texts: list[str], max_bytes: int = 30_000) -> list[list[str]]:
+    """
+    将字符串列表按 UTF-8 编码字节大小切割为多个批次，每批总字节数不超过 max_bytes。
+
+    参数:
+        texts (list[str]): 要切割的文本列表。
+        max_bytes (int): 每个批次最大字节数（默认为 30,000 字节）。
+
+    返回:
+        list[list[str]]: 切割后的文本批次列表。
+    """
+    batches: list[list[str]] = []
+    current_batch: list[str] = []
+    current_bytes: int = 0
+
+    for text in texts:
+        text_bytes = len(text.encode("utf-8"))
+
+        if text_bytes > max_bytes:
+            if current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_bytes = 0
+            batches.append([text])
+            continue
+
+        if current_bytes + text_bytes <= max_bytes:
+            current_batch.append(text)
+            current_bytes += text_bytes
+        else:
+            batches.append(current_batch)
+            current_batch = [text]
+            current_bytes = text_bytes
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches

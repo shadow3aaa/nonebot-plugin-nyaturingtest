@@ -78,7 +78,16 @@ class HippoMemory:
             return
         logger.info("已清除所有记忆")
 
-    def add_texts(self, texts: list[str]) -> None:
+    def add_text(self, text: str):
+        """
+        添加文本到缓存
+
+        Args:
+            text: 要添加的文本
+        """
+        self._cache += text + "\n"
+
+    def add_texts(self, texts: list[str]):
         """
         添加文本到缓存
 
@@ -86,7 +95,7 @@ class HippoMemory:
             texts: 要添加的文本列表
         """
         for text in texts:
-            self._cache += text + "\n"
+            self.add_text(text)
 
     def index(self):
         """
@@ -126,9 +135,7 @@ class HippoMemory:
         return list(set(docs))
 
 
-def _split_text_by_tokens(
-    text: str, tokenizer, max_tokens=8192, overlap=100
-) -> list[str]:
+def _split_text_by_tokens(text: str, tokenizer, max_tokens=8192, overlap=100) -> list[str]:
     """
     按照指定的最大 token 数量和重叠数量将文本分割成多个块
     Args:

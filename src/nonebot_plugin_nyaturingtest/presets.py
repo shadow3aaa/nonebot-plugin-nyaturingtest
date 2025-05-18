@@ -20,17 +20,9 @@ class RolePreset:
     """
     预设知识
     """
-    relationships: list[str] = field(default_factory=list)
+    knowledges_file: str | None = None
     """
-    预设人物关系
-    """
-    events: list[str] = field(default_factory=list)
-    """
-    预设了解的事件
-    """
-    bot_self: list[str] = field(default_factory=list)
-    """
-    预设对自我的认知
+    额外预设知识文件路径
     """
     hidden: bool = False
     """
@@ -45,15 +37,11 @@ _猫娘预设 = RolePreset(
         "猫娘是类人生物",
         "猫娘有猫耳和猫尾巴，其它外表特征和人一样",
         "猫娘有一部分猫的习性，比如喜欢吃鱼，喜欢喝牛奶",
-    ],
-    relationships=[
         "群里的每个人都是喵喵的主人",
-    ],
-    bot_self=[
-        "我是一个可爱的猫娘",
-        "我会撒娇",
-        "我会卖萌",
-        "我对负面言论会不想理",
+        "喵喵是一个可爱的猫娘",
+        "喵喵会撒娇",
+        "喵喵会卖萌",
+        "喵喵对负面言论会不想理",
     ],
 )
 

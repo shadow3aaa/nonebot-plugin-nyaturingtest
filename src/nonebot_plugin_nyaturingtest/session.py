@@ -10,6 +10,7 @@ import random
 import re
 import traceback
 
+import anyio
 from nonebot import logger
 import nonebot_plugin_localstore as store
 from openai import AsyncOpenAI
@@ -341,9 +342,9 @@ class Session:
         preset = PRESETS[filename]
         await self.set_role(preset.name, preset.role)
         self.long_term_memory.add_texts(preset.knowledges)
-        self.long_term_memory.add_texts(preset.relationships)
-        self.long_term_memory.add_texts(preset.events)
-        self.long_term_memory.add_texts(preset.bot_self)
+        if preset.knowledges_file:
+            async with await anyio.open_file(file=preset.knowledges_file, encoding="utf-8") as f:
+                self.long_term_memory.add_text(await f.read())
         self.long_term_memory.index()
         logger.info(f"加载预设：{filename} 成功")
         return True

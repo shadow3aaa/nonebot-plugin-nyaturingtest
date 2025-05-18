@@ -106,6 +106,7 @@ class HippoMemory:
             texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8192, overlap=100)
             texts_list = _split_texts_by_byte_limit(texts, max_bytes=30_000)
             for texts in texts_list:
+                logger.debug(f"索引文本大小: {sum(len(' '.join(texts).encode()) for texts in texts_list) / 1024}kb")
                 self.hippo.index(texts)
             logger.info(f"已索引 {len(texts)} 条缓存文本")
             self._cache = ""

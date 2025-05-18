@@ -227,7 +227,7 @@ async def do_set_presets(matcher: type[Matcher], group_id: int, file: str):
             task.add_done_callback(_tasks.discard)
     async with group_states[group_id].lock:
         state = group_states[group_id]
-        if state.session.load_preset(filename=file):
+        if await state.session.load_preset(filename=file):
             await matcher.finish(f"预设已加载: {file}")
         else:
             await matcher.finish(f"不存在的预设: {file}")

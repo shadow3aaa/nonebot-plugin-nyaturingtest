@@ -102,8 +102,7 @@ class HippoMemory:
         对缓存的文本进行索引，整理到长期记忆
         """
         if self._cache:
-            # 切割(BAAI/bge-m3上限为8192tokens)
-            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8092, overlap=100)
+            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=512, overlap=100)
             texts_list = _split_texts_by_byte_limit(texts, max_bytes=30_000)
             for texts in texts_list:
                 logger.debug(f"索引文本大小: {sum(len(' '.join(texts).encode()) for texts in texts_list) / 1024}kb")

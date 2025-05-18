@@ -146,7 +146,7 @@ def _split_text_by_tokens(text: str, tokenizer, max_tokens=8192, overlap=100) ->
     Returns:
         分割后的文本块列表
     """
-    tokens = tokenizer.encode(text, add_special_tokens=False)
+    tokens = tokenizer.encode(text, add_special_tokens=False, truncation=True)
     chunks = []
     start = 0
     while start < len(tokens):

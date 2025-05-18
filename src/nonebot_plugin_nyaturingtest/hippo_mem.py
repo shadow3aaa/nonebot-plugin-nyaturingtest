@@ -1,10 +1,14 @@
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 import os
 import shutil
 
 from hipporag import HippoRAG
 from nonebot import logger
+import numpy as np
 from transformers.models.auto.tokenization_auto import AutoTokenizer
+
+from .siliconflow_embeddings import SiliconFlowEmbeddings
 
 
 class HippoMemory:
@@ -44,7 +48,14 @@ class HippoMemory:
         # 缓存要索引的文本
         self._cache = ""
         # 初始化分词器
-        self.tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-m3", trust_remote_code=True)
+        self._tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-m3", trust_remote_code=True)
+        # 初始化嵌入模型，用于计算是否需要重新检索
+        self._embedding_model = SiliconFlowEmbeddings(
+            model="BAAI/bge-m3",
+            api_key=embedding_api_key,
+        )
+        self._docs = []
+        self._cosine_similarity = 0.0
 
     def _now_str(self) -> str:
         """返回当前时间的 ISO 格式字符串"""
@@ -62,6 +73,9 @@ class HippoMemory:
                 logger.error(f"Failed to delete persist directory: {e}")
         else:
             logger.warning(f"Persist directory {self.persist_directory} does not exist.")
+        # 删除内存缓存
+        self._docs.clear()
+        self._cosine_similarity = 0.0
         # 重新创建索引
         try:
             self.hippo = HippoRAG(
@@ -97,22 +111,23 @@ class HippoMemory:
         for text in texts:
             self.add_text(text)
 
-    def index(self):
+    def _index(self):
         """
         对缓存的文本进行索引，整理到长期记忆
         """
         if self._cache:
-            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=512, overlap=100)
+            texts = _split_text_by_tokens(self._cache, self._tokenizer, max_tokens=512, overlap=100)
             texts_list = _split_texts_by_byte_limit(texts, max_bytes=30_000)
             for texts in texts_list:
-                logger.debug(f"索引文本大小: {sum(len(' '.join(texts).encode()) for texts in texts_list) / 1024}kb")
+                total_bytes = sum(len(" ".join(batch).encode()) for batch in texts_list)
+                logger.debug(f"索引文本总大小: {total_bytes / 1024:.2f} KB")
                 self.hippo.index(texts)
             logger.info(f"已索引 {len(texts)} 条缓存文本")
             self._cache = ""
         else:
             logger.info("没有缓存的文本需要索引")
 
-    def retrieve(self, queries: list[str], k: int = 5) -> list[str]:
+    async def retrieve(self, queries: list[str], k: int = 5) -> list[str]:
         """
         检索与查询相关的文本
 
@@ -123,11 +138,19 @@ class HippoMemory:
         Returns:
             包含检索结果的Document列表
         """
+        # 检查是否需要重新检索
+        if not self._need_retrieve(queries):
+            logger.info("不需要重新检索")
+            return self._docs
+
+        # 重新索引
+        self._index()
+
         # 切割(BAAI/bge-m3上限为8192tokens)
         logger.debug(f"查询文本: {queries}")
         splited_queries = []
         for query in queries:
-            splited_queries += _split_text_by_tokens(query, self.tokenizer, max_tokens=8192, overlap=100)
+            splited_queries += _split_text_by_tokens(query, self._tokenizer, max_tokens=8192, overlap=100)
         logger.debug(f"分割后的查询: {splited_queries}")
         query_batches = _split_texts_by_byte_limit(splited_queries, max_bytes=30_000)
 
@@ -139,8 +162,57 @@ class HippoMemory:
             docs = [doc for result in results for doc in result.docs]
             all_docs.update(docs)
 
+        self._docs = list(all_docs)
+        self._cosine_similarity = await _cosine_similarity(queries, self._docs, self._embedding_model.embed_documents)
+
         # 去重
-        return list(all_docs)
+        return self._docs
+
+    async def _need_retrieve(self, new_queries: list[str], scale: float = 0.8) -> bool:
+        """
+        Arguments:
+            new_queries: 新的查询文本
+            scale: 触发重新检索的余弦相似度比例的阈值，如0.8代表相似度不如原来的80%则重新检索
+        判断是否需要重新检索
+        """
+
+        if not self._docs or self._cosine_similarity == 0.0:
+            return True
+        current_similarity = await _cosine_similarity(new_queries, self._docs, self._embedding_model.embed_documents)
+
+        logger.debug(f"当前余弦相似度: {current_similarity}")
+        logger.debug(f"原余弦相似度: {self._cosine_similarity}")
+        logger.debug(f"触发比例: {scale}, 当前比例: {current_similarity / self._cosine_similarity}")
+
+        return current_similarity < scale * self._cosine_similarity
+
+
+async def _cosine_similarity(
+    a: list[str], b: list[str], embed: Callable[[list[str]], Awaitable[list[list[float]]]]
+) -> float:
+    """
+    计算两个字符串列表之间的整体余弦相似度
+    Args:
+        a: 第一个字符串列表
+        b: 第二个字符串列表
+    Returns:
+        余弦相似度值
+    """
+    # 向量化
+    a_vecs = np.array(await embed(a))
+    b_vecs = np.array(await embed(b))
+    # 计算平均向量
+    a_mean = np.mean(a_vecs, axis=0)
+    b_mean = np.mean(b_vecs, axis=0)
+    return _cosine(a_mean, b_mean)
+
+
+def _cosine(a, b) -> float:
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return np.dot(a, b) / (norm_a * norm_b)
 
 
 def _split_text_by_tokens(text: str, tokenizer, max_tokens=8192, overlap=100) -> list[str]:

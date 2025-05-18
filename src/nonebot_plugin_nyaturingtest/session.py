@@ -124,10 +124,6 @@ class Session:
         """
         冒泡意愿总和（冒泡意愿会累积）
         """
-        self.__update_hippo = False
-        """
-        是否重新索引，检索HippoRAG
-        """
         self.__search_result = None
 
         # 从文件加载会话状态（如果存在）
@@ -345,7 +341,6 @@ class Session:
         if preset.knowledges_file:
             async with await anyio.open_file(file=preset.knowledges_file, encoding="utf-8") as f:
                 self.long_term_memory.add_text(await f.read())
-        self.long_term_memory.index()
         logger.info(f"加载预设：{filename} 成功")
         return True
 
@@ -386,13 +381,10 @@ class Session:
     #    进行长期记忆更新，评估自身要不要加入对话
     # 3. 对话阶段：在这个阶段，llm从内存，检索阶段，反馈阶段中得到相关信息，以发送信息
 
-    def __search_stage(self):
+    async def __search_stage(self):
         """
         检索阶段
         """
-        if not self.__update_hippo:
-            return
-        self.__update_hippo = False
         logger.debug("检索阶段开始")
         # 搜索 短期聊天记录 + 历史总结 + 环境总结
         retrieve_messages = (
@@ -401,7 +393,7 @@ class Session:
             + [self.chat_summary]
         )
         try:
-            long_term_memory = self.long_term_memory.retrieve(retrieve_messages, k=3)
+            long_term_memory = await self.long_term_memory.retrieve(retrieve_messages, k=3)
             logger.debug(f"搜索到的相关记忆：{long_term_memory}")
         except Exception as e:
             logger.error(f"回忆失败: {e}")
@@ -912,7 +904,7 @@ class Session:
         更新群聊消息
         """
         # 检索阶段
-        self.__search_stage()
+        await self.__search_stage()
         # 反馈阶段
         await self.__feedback_stage(messages_chunk=messages_chunk, llm=llm)
         # 对话阶段
@@ -933,10 +925,6 @@ class Session:
                     llm=llm,
                 )
 
-        # 压入消息记忆
-        def enable_update_hippo():
-            self.__update_hippo = True
-
         if reply_messages:
             self.long_term_memory.add_texts(
                 texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk]
@@ -945,14 +933,13 @@ class Session:
             await self.global_memory.update(
                 messages_chunk
                 + [Message(user_name=self.__name, content=msg, time=datetime.now()) for msg in reply_messages],
-                after_compress=enable_update_hippo,
             )
         else:
             self.long_term_memory.add_texts(
                 texts=[f"'{msg.user_name}':'{msg.content}'" for msg in messages_chunk],
             )
 
-            await self.global_memory.update(messages_chunk, after_compress=enable_update_hippo)
+            await self.global_memory.update(messages_chunk)
 
         # 保存会话状态
         self.save_session()

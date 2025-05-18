@@ -139,7 +139,7 @@ class HippoMemory:
             包含检索结果的Document列表
         """
         # 检查是否需要重新检索
-        if not self._need_retrieve(queries):
+        if not await self._need_retrieve(queries):
             logger.info("不需要重新检索")
             return self._docs
 

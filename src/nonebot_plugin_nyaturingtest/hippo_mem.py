@@ -103,7 +103,7 @@ class HippoMemory:
         """
         if self._cache:
             # 切割(BAAI/bge-m3上限为8192tokens)
-            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8192, overlap=100)
+            texts = _split_text_by_tokens(self._cache, self.tokenizer, max_tokens=8092, overlap=100)
             texts_list = _split_texts_by_byte_limit(texts, max_bytes=30_000)
             for texts in texts_list:
                 logger.debug(f"索引文本大小: {sum(len(' '.join(texts).encode()) for texts in texts_list) / 1024}kb")

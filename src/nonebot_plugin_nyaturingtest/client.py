@@ -12,7 +12,7 @@ class LLMClient:
             messages=[{"role": "user", "content": prompt}],
             model=model,
             temperature=0.5,
-            timeout=30,
+            timeout=300,  # 5 minutes timeout
         )
         content = response.choices[0].message.content
         if content:

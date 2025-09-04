@@ -74,10 +74,12 @@ class ImageManager:
 
     def __init__(self):
         if not self._initialized:
-            self._vlm = SiliconFlowVLM(
-                api_key=plugin_config.nyaturingtest_siliconflow_api_key,
-                model="Pro/Qwen/Qwen2.5-VL-7B-Instruct",
-            )
+            self._vlm = None
+            if plugin_config.nyaturingtest_vlm_enabled:
+                self._vlm = SiliconFlowVLM(
+                    api_key=plugin_config.nyaturingtest_siliconflow_api_key,
+                    model="Pro/Qwen/Qwen2.5-VL-7B-Instruct",
+                )
             IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             self._initialized = True
 
@@ -85,6 +87,8 @@ class ImageManager:
         """
         获取图片描述
         """
+        if not self._vlm:
+            return None
         image_bytes = base64.b64decode(image_base64)
         # 计算图片的SHA256哈希值
         image_hash = _calculate_image_hash(image_bytes)

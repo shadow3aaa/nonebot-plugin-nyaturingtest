@@ -166,6 +166,7 @@
 | nyaturingtest_chat_openai_base_url |              否              | "https://api.openai.com/v1/chat/completions" |          openai 接口请求的 url           |
 | nyaturingtest_siliconflow_api_key  |              是              |                      无                      | siliconflow(硅基流动) api 接口的 api key |
 |    nyaturingtest_enabled_groups    | 否(但是不填写此插件就无意义) |                `[]`\(空列表\)                |          仅在这些群组中启用插件          |
+|      nyaturingtest_vlm_enabled       |              否              |                    `True`                    | 是否启用VLM(视觉语言模型)进行图片理解, 默认开启 |
 
 ## 🎉 使用
 
